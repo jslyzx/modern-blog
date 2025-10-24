@@ -26,6 +26,22 @@ pnpm dev
 
 Visit [http://localhost:3000](http://localhost:3000) to see the landing page showcasing Tailwind styling, shadcn components, and a KaTeX example.
 
+## Environment Variables
+
+The application expects the following database settings to be defined in a `.env.local` file:
+
+```bash
+BLOG_DB_HOST=localhost
+BLOG_DB_PORT=3306
+BLOG_DB_USER=root
+BLOG_DB_PASSWORD=password
+BLOG_DB_NAME=blog
+# Optional: set to "true", "false", or a custom SSL profile name
+BLOG_DB_SSL=false
+```
+
+Use the [`/api/health/db`](http://localhost:3000/api/health/db) route to verify connectivity with your database. A successful response returns `{ status: "ok" }`, while failures return a `503` status code with an error payload.
+
 ## Useful Scripts
 
 ```bash
