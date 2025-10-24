@@ -1,6 +1,6 @@
-import { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "mysql2";
 
-import { getPool } from "@/lib/db";
+import { query } from "@/lib/db";
 
 export interface AdminUser {
   id: number;
@@ -17,10 +17,9 @@ interface AdminUserRow extends RowDataPacket {
 }
 
 export async function findAdminByEmail(email: string): Promise<AdminUser | null> {
-  const pool = getPool();
-  const [rows] = await pool.query<AdminUserRow[]>(
+  const rows = await query<AdminUserRow[]>(
     "SELECT id, email, password_hash, name FROM admin_users WHERE email = ? LIMIT 1",
-    [email]
+    [email],
   );
 
   if (!rows.length) {
