@@ -86,3 +86,13 @@ pnpm shadcn add alert-dialog
 ```
 
 Generated components will follow the aliases defined in `components.json` and work out of the box with the existing Tailwind configuration.
+
+## Media Uploads
+
+The admin editor available at [`/admin`](http://localhost:3000/admin) supports inline image uploads. Files are handled by the `POST /api/media/upload` route and are persisted to the `public/uploads` directory so that they can be served statically by Next.js.
+
+- **Supported types:** `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/svg+xml`
+- **Maximum file size:** 5 MB per upload
+- **Storage path:** `public/uploads/<timestamped-filename>`
+
+Uploads are ignored by Git (except for the placeholder `.gitkeep` file) so they remain local-only. Clean up any unused media files from `public/uploads` as part of your regular content maintenance.

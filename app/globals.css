@@ -58,3 +58,46 @@
       "Segoe UI", sans-serif;
   }
 }
+
+@layer components {
+  .editor-content.ProseMirror {
+    @apply min-h-[16rem] whitespace-pre-wrap break-words leading-relaxed outline-none;
+  }
+
+  .editor-content.ProseMirror p {
+    @apply mb-3;
+  }
+
+  .editor-content.ProseMirror p:last-child {
+    @apply mb-0;
+  }
+
+  .editor-content.ProseMirror a {
+    @apply text-primary underline underline-offset-4;
+  }
+
+  .editor-content.ProseMirror ul {
+    @apply list-disc pl-6;
+  }
+
+  .editor-content.ProseMirror ol {
+    @apply list-decimal pl-6;
+  }
+
+  .editor-content.ProseMirror img,
+  .preview-content img {
+    @apply my-4 h-auto max-w-full rounded-md;
+  }
+
+  .preview-content {
+    @apply leading-relaxed;
+  }
+
+  .preview-content p {
+    @apply mb-3;
+  }
+
+  .preview-content p:last-child {
+    @apply mb-0;
+  }
+}
