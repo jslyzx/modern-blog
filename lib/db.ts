@@ -1,24 +1,76 @@
-import mysql from "mysql2/promise";
+import mysql, {
+  type Pool,
+  type PoolOptions,
+  type ResultSetHeader,
+  type RowDataPacket,
+} from "mysql2/promise";
 
-let pool: mysql.Pool | null = null;
+import { databaseEnv } from "@/lib/env";
 
-export function getPool() {
-  if (pool) {
-    return pool;
-  }
+type QueryParams = ReadonlyArray<unknown> | Record<string, unknown>;
 
-  const databaseUrl = process.env.DATABASE_URL;
+type GlobalMysql = {
+  mysqlPool?: Pool;
+};
 
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL environment variable is not defined.");
-  }
+const globalForMysql = globalThis as typeof globalThis & GlobalMysql;
 
-  pool = mysql.createPool({
-    uri: databaseUrl,
+const buildPoolOptions = (): PoolOptions => {
+  const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT ?? 10);
+
+  const options: PoolOptions = {
+    host: databaseEnv.host,
+    port: databaseEnv.port,
+    user: databaseEnv.user,
+    password: databaseEnv.password,
+    database: databaseEnv.database,
     waitForConnections: true,
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT ?? 10),
+    connectionLimit: Number.isFinite(connectionLimit) ? connectionLimit : 10,
+    maxIdle: 10,
+    idleTimeout: 60_000,
     queueLimit: 0,
-  });
+  };
 
-  return pool;
-}
+  const { ssl } = databaseEnv;
+
+  if (typeof ssl === "string") {
+    options.ssl = ssl;
+  } else if (ssl === true) {
+    options.ssl = {
+      rejectUnauthorized: true,
+    };
+  }
+
+  return options;
+};
+
+export const getPool = (): Pool => {
+  if (!globalForMysql.mysqlPool) {
+    globalForMysql.mysqlPool = mysql.createPool(buildPoolOptions());
+  }
+
+  return globalForMysql.mysqlPool;
+};
+
+export const query = async <T = RowDataPacket[] | ResultSetHeader>(
+  sql: string,
+  params: QueryParams = [],
+): Promise<T> => {
+  try {
+    const [rows] = await getPool().query(sql, params as unknown);
+
+    return rows as T;
+  } catch (error) {
+    console.error("Database query failed", {
+      sql,
+      params,
+      error,
+    });
+
+    throw error;
+  }
+};
+
+export const pingDatabase = async (): Promise<void> => {
+  await query("SELECT 1");
+};
