@@ -1,98 +1,81 @@
-# Next.js Blog Starter
+# Modern Blog Admin
 
-A batteries-included blog foundation powered by **Next.js 15**, **React 19**, **Tailwind CSS**, **shadcn UI**, and **KaTeX**. It ships with opinionated linting and formatting so you can focus on creating content instead of wiring up tooling.
+This project provides a secure admin interface for the Modern Blog platform, built with Next.js App Router and credentials-based authentication powered by NextAuth.js.
 
-## Features
+## Getting started
 
-- ⚡️ Next.js 15 App Router with React 19 support.
-- 🎨 Tailwind CSS 3 configured with CSS variable driven design tokens.
-- 🧩 Pre-built shadcn UI primitives (Button, Input, Dialog) and CLI configured via `components.json`.
-- 🧮 KaTeX stylesheet loaded globally for math-friendly posts.
-- ✅ ESLint + Prettier, with an optional Husky pre-commit hook running `pnpm lint`.
-
-## Prerequisites
-
-- Node.js 18.18+ or 20+ (Corepack recommended).
-- [pnpm](https://pnpm.io/) (`corepack enable pnpm`).
-
-## Getting Started
-
-Install dependencies and start the dev server:
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Visit [http://localhost:3000](http://localhost:3000) to see the landing page showcasing Tailwind styling, shadcn components, and a KaTeX example.
-
-## Environment Variables
-
-The application expects the following database settings to be defined in a `.env.local` file:
-
-```bash
-BLOG_DB_HOST=localhost
-BLOG_DB_PORT=3306
-BLOG_DB_USER=root
-BLOG_DB_PASSWORD=password
-BLOG_DB_NAME=blog
-# Optional: set to "true", "false", or a custom SSL profile name
-BLOG_DB_SSL=false
-```
-
-Use the [`/api/health/db`](http://localhost:3000/api/health/db) route to verify connectivity with your database. A successful response returns `{ status: "ok" }`, while failures return a `503` status code with an error payload.
-
-## Seeding the Admin Account
-
-The project ships with an idempotent seeding script that ensures your admin account exists and remains in sync with the credentials you provide.
-
-1. Configure the required environment variables (for example in your shell or an `.env.local` file):
+1. **Install dependencies**
 
    ```bash
-   ADMIN_USERNAME=admin
-   ADMIN_PASSWORD=super-secret
-   ADMIN_EMAIL=admin@example.com
+   npm install
    ```
 
-   > The script targets the `admins` table by default. To use a different table name, set `ADMIN_TABLE_NAME` to a value containing only letters, numbers, or underscores.
-
-2. Run the seeding command:
+2. **Configure environment variables** by creating an `.env.local` file in the project root:
 
    ```bash
-   pnpm seed:admin
+   NEXTAUTH_URL=http://localhost:3000
+   NEXTAUTH_SECRET=your-generated-secret
+   DATABASE_URL=mysql://user:password@localhost:3306/modern_blog
+   DB_CONNECTION_LIMIT=10 # optional
+   BCRYPT_SALT_ROUNDS=12  # optional override (defaults to 12)
    ```
 
-The script will create the admin row if it does not already exist and will update the stored email and password hash when those values change. If any required environment variable is missing, the script exits with a non-zero status and prints a helpful error message.
+   - `NEXTAUTH_SECRET` can be generated with `openssl rand -base64 32`.
+   - `NEXTAUTH_URL` should match the URL where the application is hosted.
+   - `DATABASE_URL` must point to a MySQL instance that contains the `admin_users` table with at least one seeded administrator.
 
-## Useful Scripts
+3. **Seed an administrator account**
 
-```bash
-pnpm dev        # Start the Next.js development server
-pnpm build      # Create a production build
-pnpm start      # Start the production server
-pnpm lint       # Run ESLint using the Next.js configuration
-pnpm typecheck  # Validate TypeScript types
-pnpm format     # Check formatting with Prettier
-pnpm format:fix # Format files with Prettier
-pnpm shadcn     # Access the shadcn UI CLI
-```
+   Ensure the following table (or equivalent) exists:
 
-## Adding New Components
+   ```sql
+   CREATE TABLE IF NOT EXISTS admin_users (
+     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+     email VARCHAR(255) NOT NULL UNIQUE,
+     password_hash VARCHAR(255) NOT NULL,
+     name VARCHAR(255) NULL,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   ```
 
-Use the shadcn CLI to scaffold additional UI primitives:
+   Hash passwords using the same bcrypt settings as the app (12 salt rounds by default). Example in Node.js:
 
-```bash
-pnpm shadcn add alert-dialog
-```
+   ```bash
+   node -e "console.log(require('bcryptjs').hashSync('AdminPassword123!', 12))"
+   ```
 
-Generated components will follow the aliases defined in `components.json` and work out of the box with the existing Tailwind configuration.
+   Then insert the admin user:
 
-## Media Uploads
+   ```sql
+   INSERT INTO admin_users (email, password_hash, name)
+   VALUES ('admin@example.com', '$2a$12$...', 'Admin User');
+   ```
 
-The admin editor available at [`/admin`](http://localhost:3000/admin) supports inline image uploads. Files are handled by the `POST /api/media/upload` route and are persisted to the `public/uploads` directory so that they can be served statically by Next.js.
+4. **Run in development**
 
-- **Supported types:** `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/svg+xml`
-- **Maximum file size:** 5 MB per upload
-- **Storage path:** `public/uploads/<timestamped-filename>`
+   ```bash
+   npm run dev
+   ```
 
-Uploads are ignored by Git (except for the placeholder `.gitkeep` file) so they remain local-only. Clean up any unused media files from `public/uploads` as part of your regular content maintenance.
+   Visit [http://localhost:3000/admin/login](http://localhost:3000/admin/login) to sign in with the seeded credentials.
+
+## Authentication flow
+
+- The `/admin/login` page uses a secure server action to authenticate credentials with NextAuth's Credentials provider.
+- Passwords are verified with bcrypt against the stored hash in the MySQL database.
+- Successful login establishes a secure session via NextAuth. Unauthenticated requests to `/admin` routes are redirected to the login page by middleware.
+- Invalid credentials return a clear inline error message without redirecting away from the form.
+
+## Project structure
+
+- `auth.ts` – central NextAuth configuration and exports for handlers, session, and server actions.
+- `app/admin` – protected admin routes and layout shell.
+- `app/api/auth/[...nextauth]` – NextAuth route handler for the App Router.
+- `lib` – shared utilities for database access and authentication helpers.
+- `components/ui` – shadcn-inspired UI primitives used by the login form and admin pages.
+
+## Deployment notes
+
+When deploying, ensure the environment variables listed above are available and that the MySQL database is reachable from the deployed environment.
+
+Session cookies are managed automatically by NextAuth and scoped to HTTPS in production.
