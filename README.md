@@ -7,7 +7,7 @@ This project provides a secure admin interface for the Modern Blog platform, bui
 1. **Install dependencies**
 
    ```bash
-   npm install
+   pnpm install
    ```
 
 2. **Configure environment variables** by creating an `.env.local` file in the project root:
@@ -54,10 +54,26 @@ This project provides a secure admin interface for the Modern Blog platform, bui
 4. **Run in development**
 
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
    Visit [http://localhost:3000/admin/login](http://localhost:3000/admin/login) to sign in with the seeded credentials.
+
+## Testing & quality checks
+
+Run the project quality checks with pnpm:
+
+```bash
+pnpm lint   # ESLint (Next.js configuration)
+pnpm check  # TypeScript type checking
+pnpm test   # Vitest unit and integration tests
+```
+
+Unit tests live under `tests/unit` and cover environment validation and password hashing helpers. Integration smoke tests for the database health endpoint can be found in `tests/integration`.
+
+## Continuous integration
+
+A GitHub Actions workflow is defined at `.github/workflows/ci.yml`. It installs dependencies with pnpm and runs `pnpm lint`, `pnpm check`, and `pnpm test` on pushes and pull requests targeting the `main` branch.
 
 ## Authentication flow
 
