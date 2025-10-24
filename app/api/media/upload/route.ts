@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import formidable, { errors as formidableErrors, type File as FormidableFile } from "formidable";
 import { promises as fs } from "node:fs/promises";
+import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
 
 import {
@@ -31,11 +32,7 @@ const cleanupTempFile = async (filepath: string | undefined) => {
   }
 };
 
-type FormidableCompatibleRequest = NodeJS.ReadableStream & {
-  headers: Record<string, string>;
-  method: string;
-  url: string;
-};
+type FormidableCompatibleRequest = IncomingMessage;
 
 const toFormidableRequest = (request: NextRequest): FormidableCompatibleRequest => {
   const stream = request.body;
@@ -44,14 +41,17 @@ const toFormidableRequest = (request: NextRequest): FormidableCompatibleRequest 
       ? Readable.fromWeb(stream as unknown as ReadableStream<Uint8Array>)
       : Readable.from([]);
 
-  const headers = Object.fromEntries(request.headers.entries());
+  const headers = Array.from(request.headers.entries()).reduce<IncomingHttpHeaders>((acc, [key, value]) => {
+    acc[key.toLowerCase()] = value;
+    return acc;
+  }, {});
 
   return Object.assign(nodeStream, {
     headers,
     method: request.method,
     url: request.url,
     httpVersion: "1.1",
-  });
+  }) as unknown as IncomingMessage;
 };
 
 const parseUpload = async (request: NextRequest): Promise<FormidableFile> => {
@@ -63,24 +63,18 @@ const parseUpload = async (request: NextRequest): Promise<FormidableFile> => {
 
   const formidableRequest = toFormidableRequest(request);
 
-  return new Promise<FormidableFile>((resolve, reject) => {
-    form.parse(formidableRequest as any, (error, _fields, files) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+  const [, files] = await form.parse(formidableRequest);
 
-      const primaryFile = (files.file ?? Object.values(files)[0]) as FormidableFile | FormidableFile[] | undefined;
-      const resolvedFile = Array.isArray(primaryFile) ? primaryFile[0] : primaryFile;
+  const firstEntry = Object.values(files).find(
+    (value): value is FormidableFile[] => Array.isArray(value) && value.length > 0,
+  );
+  const resolvedFile = firstEntry?.[0];
 
-      if (!resolvedFile) {
-        reject(new Error("No file provided"));
-        return;
-      }
+  if (!resolvedFile) {
+    throw new Error("No file provided");
+  }
 
-      resolve(resolvedFile);
-    });
-  });
+  return resolvedFile;
 };
 
 const isFileTooLargeError = (error: unknown) =>
