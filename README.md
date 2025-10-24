@@ -42,6 +42,28 @@ BLOG_DB_SSL=false
 
 Use the [`/api/health/db`](http://localhost:3000/api/health/db) route to verify connectivity with your database. A successful response returns `{ status: "ok" }`, while failures return a `503` status code with an error payload.
 
+## Seeding the Admin Account
+
+The project ships with an idempotent seeding script that ensures your admin account exists and remains in sync with the credentials you provide.
+
+1. Configure the required environment variables (for example in your shell or an `.env.local` file):
+
+   ```bash
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD=super-secret
+   ADMIN_EMAIL=admin@example.com
+   ```
+
+   > The script targets the `admins` table by default. To use a different table name, set `ADMIN_TABLE_NAME` to a value containing only letters, numbers, or underscores.
+
+2. Run the seeding command:
+
+   ```bash
+   pnpm seed:admin
+   ```
+
+The script will create the admin row if it does not already exist and will update the stored email and password hash when those values change. If any required environment variable is missing, the script exits with a non-zero status and prints a helpful error message.
+
 ## Useful Scripts
 
 ```bash
