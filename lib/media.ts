@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs/promises";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 export interface MediaUpload {
@@ -29,8 +29,6 @@ export interface AliyunOssConfiguration {
 }
 
 export class AliyunOssMediaStorage implements MediaStorageProvider {
-  constructor(_config: AliyunOssConfiguration) {}
-
   async save(): Promise<MediaUploadResult> {
     throw new Error("Aliyun OSS media provider is not implemented yet.");
   }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import formidable, { errors as formidableErrors, type File as FormidableFile } from "formidable";
-import { promises as fs } from "node:fs/promises";
+import fs from "node:fs/promises";
 import { Readable } from "node:stream";
 
 import {
@@ -41,7 +41,8 @@ const toFormidableRequest = (request: NextRequest): FormidableCompatibleRequest 
   const stream = request.body;
   const nodeStream =
     stream != null
-      ? Readable.fromWeb(stream as unknown as ReadableStream<Uint8Array>)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? Readable.fromWeb(stream as any)
       : Readable.from([]);
 
   const headers = Object.fromEntries(request.headers.entries());
@@ -64,6 +65,7 @@ const parseUpload = async (request: NextRequest): Promise<FormidableFile> => {
   const formidableRequest = toFormidableRequest(request);
 
   return new Promise<FormidableFile>((resolve, reject) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     form.parse(formidableRequest as any, (error, _fields, files) => {
       if (error) {
         reject(error);

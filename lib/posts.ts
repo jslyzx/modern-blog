@@ -15,6 +15,7 @@ interface PostRow extends RowDataPacket {
   content: string;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
+  isFeatured?: number | boolean;
 }
 
 interface TagRow extends RowDataPacket {
@@ -42,6 +43,7 @@ export interface PublishedPostSummary {
   content: string;
   publishedAt: Date | null;
   updatedAt: Date | null;
+  isFeatured?: boolean;
 }
 
 export interface PublishedPost extends PublishedPostSummary {
@@ -77,6 +79,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => ({
   content: row.content,
   publishedAt: toDate(row.publishedAt),
   updatedAt: toDate(row.updatedAt),
+  isFeatured: Boolean(row.isFeatured),
 });
 
 const POSTS_SELECT = `
@@ -90,7 +93,8 @@ const POSTS_SELECT = `
     p.canonical_url AS canonicalUrl,
     p.content,
     p.published_at AS publishedAt,
-    p.updated_at AS updatedAt
+    p.updated_at AS updatedAt,
+    p.is_featured AS isFeatured
   FROM posts p
   WHERE ${PUBLISHED_POST_CONDITION}
 `;
@@ -192,4 +196,122 @@ export const getPublishedTags = async (): Promise<PublishedTag[]> => {
     console.warn("Failed to load published tags", { error });
     return [];
   }
+};
+
+export interface PaginatedPosts {
+  posts: PublishedPostSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export const getPublishedPostsPaginated = async (
+  page: number = 1,
+  pageSize: number = 10,
+): Promise<PaginatedPosts> => {
+  const offset = (page - 1) * pageSize;
+
+  const [rows, countResult] = await Promise.all([
+    query<PostRow[]>(
+      `${POSTS_SELECT} ORDER BY p.published_at DESC LIMIT ? OFFSET ?`,
+      [pageSize, offset],
+    ),
+    query<Array<RowDataPacket & { total: number }>>(
+      `SELECT COUNT(*) as total FROM posts p WHERE ${PUBLISHED_POST_CONDITION}`,
+    ),
+  ]);
+
+  const total = countResult[0]?.total ?? 0;
+  const totalPages = Math.ceil(total / pageSize);
+
+  return {
+    posts: rows.map(mapPostRow),
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
+};
+
+export const getFeaturedPosts = async (limit: number = 3): Promise<PublishedPostSummary[]> => {
+  const rows = await query<PostRow[]>(
+    `${POSTS_SELECT} AND p.is_featured = 1 ORDER BY p.published_at DESC LIMIT ?`,
+    [limit],
+  );
+
+  return rows.map(mapPostRow);
+};
+
+export const searchPublishedPosts = async (searchQuery: string): Promise<PublishedPostSummary[]> => {
+  if (!searchQuery?.trim()) {
+    return [];
+  }
+
+  const searchTerm = `%${searchQuery.trim()}%`;
+  const rows = await query<PostRow[]>(
+    `${POSTS_SELECT} AND (p.title LIKE ? OR p.excerpt LIKE ?) ORDER BY p.published_at DESC LIMIT 50`,
+    [searchTerm, searchTerm],
+  );
+
+  return rows.map(mapPostRow);
+};
+
+export interface AdjacentPosts {
+  previous: PublishedPostSummary | null;
+  next: PublishedPostSummary | null;
+}
+
+export const getAdjacentPosts = async (currentPostId: number): Promise<AdjacentPosts> => {
+  const [previousRows, nextRows] = await Promise.all([
+    query<PostRow[]>(
+      `
+        SELECT
+          p.id,
+          p.slug,
+          p.title,
+          p.excerpt,
+          p.meta_description AS metaDescription,
+          p.cover_image_url AS coverImageUrl,
+          p.canonical_url AS canonicalUrl,
+          p.content,
+          p.published_at AS publishedAt,
+          p.updated_at AS updatedAt,
+          p.is_featured AS isFeatured
+        FROM posts p
+        WHERE ${PUBLISHED_POST_CONDITION}
+          AND p.id < ?
+        ORDER BY p.published_at DESC
+        LIMIT 1
+      `,
+      [currentPostId],
+    ),
+    query<PostRow[]>(
+      `
+        SELECT
+          p.id,
+          p.slug,
+          p.title,
+          p.excerpt,
+          p.meta_description AS metaDescription,
+          p.cover_image_url AS coverImageUrl,
+          p.canonical_url AS canonicalUrl,
+          p.content,
+          p.published_at AS publishedAt,
+          p.updated_at AS updatedAt,
+          p.is_featured AS isFeatured
+        FROM posts p
+        WHERE ${PUBLISHED_POST_CONDITION}
+          AND p.id > ?
+        ORDER BY p.published_at ASC
+        LIMIT 1
+      `,
+      [currentPostId],
+    ),
+  ]);
+
+  return {
+    previous: previousRows.length > 0 ? mapPostRow(previousRows[0]) : null,
+    next: nextRows.length > 0 ? mapPostRow(nextRows[0]) : null,
+  };
 };

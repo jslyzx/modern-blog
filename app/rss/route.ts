@@ -46,7 +46,7 @@ export async function GET() {
 
   const items = posts
     .map((post) => {
-      const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/posts/${post.slug}`);
+      const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/${post.slug}`);
       const summarySource = post.excerpt ?? post.content;
       const summaryHtml = buildSummaryHtml(summarySource) || markdownToHtml(summarySource) || `<p>${escapeXml(post.title)}</p>`;
       const cdata = sanitizeCdata(summaryHtml);
