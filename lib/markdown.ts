@@ -84,7 +84,7 @@ export const markdownToHtml = (markdown: string): string => {
 
   const codeBlocks: string[] = [];
 
-  let working = markdown.replace(/```([\s\S]*?)```/g, (_match, code) => {
+  const working = markdown.replace(/```([\s\S]*?)```/g, (_match, code) => {
     const index = codeBlocks.length;
     codeBlocks.push(`<pre><code>${escapeHtml(String(code).trim())}</code></pre>`);
     return `${CODE_BLOCK_PLACEHOLDER}${index}@@`;

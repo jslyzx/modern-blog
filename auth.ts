@@ -75,8 +75,8 @@ const authConfig = {
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string | undefined;
+      if (session.user && token.id) {
+        session.user.id = token.id as string;
       }
 
       return session;
