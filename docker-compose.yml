@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: modern-blog-admin:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://admin.example.com}
+      BLOG_DB_HOST: ${BLOG_DB_HOST:-db}
+      BLOG_DB_PORT: ${BLOG_DB_PORT:-3306}
+      BLOG_DB_USER: ${BLOG_DB_USER:-modern_blog}
+      BLOG_DB_PASSWORD: ${BLOG_DB_PASSWORD:-changeme}
+      BLOG_DB_NAME: ${BLOG_DB_NAME:-modern_blog}
+      BLOG_DB_SSL: ${BLOG_DB_SSL:-false}
+      DB_CONNECTION_LIMIT: ${DB_CONNECTION_LIMIT:-10}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    depends_on:
+      - db
+    networks:
+      - modern-blog-admin
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${BLOG_DB_NAME:-modern_blog}
+      MYSQL_USER: ${BLOG_DB_USER:-modern_blog}
+      MYSQL_PASSWORD: ${BLOG_DB_PASSWORD:-changeme}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - modern-blog-admin
+
+volumes:
+  mysql_data:
+
+networks:
+  modern-blog-admin:
+    driver: bridge

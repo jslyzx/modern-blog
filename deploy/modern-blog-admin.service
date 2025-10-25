@@ -1,0 +1,22 @@
+[Unit]
+Description=Modern Blog Admin (Next.js) Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/modern-blog-admin
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/etc/modern-blog-admin/env
+ExecStart=/usr/bin/env pnpm start -- --hostname 0.0.0.0 --port 3000
+Restart=always
+RestartSec=5
+# Ensure uploads remain writable for the application user
+RuntimeDirectory=modern-blog-admin
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
