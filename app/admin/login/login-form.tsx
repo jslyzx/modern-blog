@@ -24,23 +24,23 @@ export function LoginForm({ loginAction, defaultError }: LoginFormProps) {
     <Card className="w-full max-w-md">
       <form action={formAction} noValidate>
         <CardHeader>
-          <CardTitle>Admin login</CardTitle>
-          <CardDescription>Access the administrative interface using your credentials.</CardDescription>
+          <CardTitle>管理员登录</CardTitle>
+          <CardDescription>请输入管理账户凭证访问后台。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">用户名</Label>
             <Input id="username" name="username" type="text" autoComplete="username" placeholder="admin" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">密码</Label>
             <Input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
           {state?.error && <Alert>{state.error}</Alert>}
         </CardContent>
         <CardFooter>
           <Button className="w-full" type="submit">
-            Sign in
+            登录
           </Button>
         </CardFooter>
       </form>

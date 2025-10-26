@@ -84,7 +84,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
         },
       }),
       Placeholder.configure({
-        placeholder: "Start writing your post content...",
+        placeholder: "开始撰写文章内容...",
       }),
     ],
     content,
@@ -105,11 +105,11 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
 
   const validateFile = (file: File) => {
     if (!allowedTypes.has(file.type)) {
-      return `Unsupported file type. Allowed types: ${allowedTypeLabels.join(", ")}.`;
+      return `不支持的文件类型，仅支持：${allowedTypeLabels.join(", ")}。`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return `File is too large. Maximum size is ${humanFileSize(MAX_FILE_SIZE_BYTES)}.`;
+      return `文件过大，最大限制为 ${humanFileSize(MAX_FILE_SIZE_BYTES)}。`;
     }
 
     return null;
@@ -139,20 +139,20 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
         const payload = await response.json();
 
         if (!response.ok) {
-          const message = typeof payload?.error === "string" ? payload.error : "Upload failed.";
+          const message = typeof payload?.error === "string" ? payload.error : "上传失败。";
           setError(message);
           return;
         }
 
         if (!payload?.url) {
-          setError("Upload failed: missing URL in response.");
+          setError("上传失败：响应缺少 URL。");
           return;
         }
 
         editor?.chain().focus().setImage({ src: payload.url, alt: file.name }).run();
       } catch (uploadError) {
         console.error("Failed to upload image", uploadError);
-        setError("Upload failed. Please try again.");
+        setError("上传失败，请重试。");
       } finally {
         setUploading(false);
       }
@@ -228,7 +228,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             onClick={() => editor.chain().focus().toggleBold().run()}
             disabled={!editor.can().chain().focus().toggleBold().run()}
             className={toolbarButtonClasses(editor.isActive("bold"))}
-            title="Bold"
+            title="粗体"
           >
             <Bold className="h-4 w-4" />
           </button>
@@ -237,7 +237,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             onClick={() => editor.chain().focus().toggleItalic().run()}
             disabled={!editor.can().chain().focus().toggleItalic().run()}
             className={toolbarButtonClasses(editor.isActive("italic"))}
-            title="Italic"
+            title="斜体"
           >
             <Italic className="h-4 w-4" />
           </button>
@@ -245,7 +245,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             type="button"
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             className={toolbarButtonClasses(editor.isActive("heading", { level: 1 }))}
-            title="Heading 1"
+            title="一级标题"
           >
             <Heading1 className="h-4 w-4" />
           </button>
@@ -253,7 +253,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             type="button"
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={toolbarButtonClasses(editor.isActive("heading", { level: 2 }))}
-            title="Heading 2"
+            title="二级标题"
           >
             <Heading2 className="h-4 w-4" />
           </button>
@@ -261,7 +261,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             type="button"
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
             className={toolbarButtonClasses(editor.isActive("heading", { level: 3 }))}
-            title="Heading 3"
+            title="三级标题"
           >
             <Heading3 className="h-4 w-4" />
           </button>
@@ -269,7 +269,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             type="button"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             className={toolbarButtonClasses(editor.isActive("bulletList"))}
-            title="Bullet List"
+            title="无序列表"
           >
             <List className="h-4 w-4" />
           </button>
@@ -277,7 +277,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             type="button"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             className={toolbarButtonClasses(editor.isActive("orderedList"))}
-            title="Ordered List"
+            title="有序列表"
           >
             <ListOrdered className="h-4 w-4" />
           </button>
@@ -285,18 +285,18 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             type="button"
             onClick={() => editor.chain().focus().toggleCode().run()}
             className={toolbarButtonClasses(editor.isActive("code"))}
-            title="Inline Code"
+            title="代码"
           >
             <Code className="h-4 w-4" />
           </button>
-          <button type="button" onClick={handleAddLink} className={toolbarButtonClasses(editor.isActive("link"))} title="Add Link">
+          <button type="button" onClick={handleAddLink} className={toolbarButtonClasses(editor.isActive("link"))} title="插入链接">
             <LinkIcon className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={() => handleAddFormula("block")}
             className={toolbarButtonClasses()}
-            title="Insert Formula (Block)"
+            title="插入公式（块级）"
           >
             <Sigma className="h-4 w-4" />
           </button>
@@ -305,7 +305,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().chain().focus().undo().run()}
             className={toolbarButtonClasses()}
-            title="Undo"
+            title="撤销"
           >
             <Undo2 className="h-4 w-4" />
           </button>
@@ -314,7 +314,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().chain().focus().redo().run()}
             className={toolbarButtonClasses()}
-            title="Redo"
+            title="重做"
           >
             <Redo2 className="h-4 w-4" />
           </button>
@@ -329,7 +329,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
             />
             <Button type="button" variant="outline" size="sm" onClick={triggerFileBrowser} disabled={uploading}>
               <ImageIcon className="mr-2 h-4 w-4" />
-              {uploading ? "Uploading..." : "Image"}
+              {uploading ? "上传中..." : "图片"}
             </Button>
           </div>
         </div>
@@ -338,15 +338,14 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
         </div>
         {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
         <p className="mt-2 text-xs text-muted-foreground">
-          Accepted types: {allowedTypeLabels.join(", ")} · Max size {humanFileSize(MAX_FILE_SIZE_BYTES)} · Use $formula$ for inline
-          math, $$formula$$ for block math
+          支持的格式：{allowedTypeLabels.join(", ")} · 最大体积 {humanFileSize(MAX_FILE_SIZE_BYTES)} · 行内公式使用 $公式$，块级公式使用 $$公式$$
         </p>
       </div>
 
       {showLinkDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-            <h3 className="mb-4 text-lg font-semibold">Add Link</h3>
+            <h3 className="mb-4 text-lg font-semibold">插入链接</h3>
             <Input
               type="url"
               placeholder="https://example.com"
@@ -363,10 +362,10 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
                   setLinkUrl("");
                 }}
               >
-                Cancel
+                取消
               </Button>
               <Button type="button" onClick={handleSaveLink}>
-                Save
+                保存
               </Button>
             </div>
           </div>
@@ -376,7 +375,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
       {showFormulaDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-            <h3 className="mb-4 text-lg font-semibold">Insert {formulaType === "block" ? "Block" : "Inline"} Formula</h3>
+            <h3 className="mb-4 text-lg font-semibold">插入{formulaType === "block" ? "块级" : "行内"}公式</h3>
             <Input
               type="text"
               placeholder="E=mc^2"
@@ -385,7 +384,9 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
               className="mb-4"
             />
             <p className="mb-4 text-xs text-muted-foreground">
-              {formulaType === "block" ? "Block formula will be inserted as $$formula$$" : "Inline formula will be inserted as $formula$"}
+              {formulaType === "block"
+                ? "块级公式将以 $$公式$$ 的形式插入"
+                : "行内公式将以 $公式$ 的形式插入"}
             </p>
             <div className="flex justify-end gap-2">
               <Button
@@ -396,10 +397,10 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
                   setFormulaContent("");
                 }}
               >
-                Cancel
+                取消
               </Button>
               <Button type="button" onClick={handleInsertFormula} disabled={!formulaContent}>
-                Insert
+                插入
               </Button>
             </div>
           </div>

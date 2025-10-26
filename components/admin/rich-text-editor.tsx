@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 const allowedTypes = new Set(allowedImageMimeTypes);
 const allowedTypeLabels = allowedImageMimeTypes.map((type) => type.replace("image/", "").replace("+xml", ""));
-const INITIAL_CONTENT = "<p>Start writing your post...</p>";
+const INITIAL_CONTENT = "<p>开始撰写文章...</p>";
 
 const humanFileSize = (bytes: number) => {
   if (bytes < 1024) {
@@ -70,11 +70,11 @@ export function RichTextEditor() {
 
   const validateFile = (file: File) => {
     if (!allowedTypes.has(file.type)) {
-      return `Unsupported file type. Allowed types: ${allowedTypeLabels.join(", ")}.`;
+      return `不支持的文件类型，仅支持：${allowedTypeLabels.join(", ")}。`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return `File is too large. Maximum size is ${humanFileSize(MAX_FILE_SIZE_BYTES)}.`;
+      return `文件过大，最大限制为 ${humanFileSize(MAX_FILE_SIZE_BYTES)}。`;
     }
 
     return null;
@@ -104,20 +104,20 @@ export function RichTextEditor() {
         const payload = await response.json();
 
         if (!response.ok) {
-          const message = typeof payload?.error === "string" ? payload.error : "Upload failed.";
+          const message = typeof payload?.error === "string" ? payload.error : "上传失败。";
           setError(message);
           return;
         }
 
         if (!payload?.url) {
-          setError("Upload failed: missing URL in response.");
+          setError("上传失败：响应缺少 URL。");
           return;
         }
 
         editor?.chain().focus().setImage({ src: payload.url, alt: file.name }).run();
       } catch (uploadError) {
         console.error("Failed to upload image", uploadError);
-        setError("Upload failed. Please try again.");
+        setError("上传失败，请重试。");
       } finally {
         setUploading(false);
       }
@@ -208,7 +208,7 @@ export function RichTextEditor() {
             />
             <Button type="button" variant="outline" onClick={triggerFileBrowser} disabled={uploading}>
               <ImageIcon className="mr-2 h-4 w-4" />
-              {uploading ? "Uploading..." : "Insert image"}
+              {uploading ? "上传中..." : "插入图片"}
             </Button>
           </div>
         </div>
@@ -217,12 +217,12 @@ export function RichTextEditor() {
         </div>
         {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
         <p className="mt-2 text-xs text-muted-foreground">
-          Accepted types: {allowedTypeLabels.join(", ")} · Max size {humanFileSize(MAX_FILE_SIZE_BYTES)}
+          支持的格式：{allowedTypeLabels.join(", ")} · 最大体积 {humanFileSize(MAX_FILE_SIZE_BYTES)}
         </p>
       </div>
 
       <div className="rounded-lg border bg-muted/30 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Preview</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">预览</h2>
         <div
           className="preview-content mt-3 space-y-4 rounded-md border bg-background p-4"
           dangerouslySetInnerHTML={{ __html: previewHtml }}

@@ -69,7 +69,7 @@ const parseUpload = async (request: NextRequest): Promise<FormidableFile> => {
       const resolvedFile = Array.isArray(primaryFile) ? primaryFile[0] : primaryFile;
 
       if (!resolvedFile) {
-        reject(new Error("No file provided"));
+        reject(new Error("缺少上传文件"));
         return;
       }
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
   if (!contentType || !contentType.toLowerCase().includes("multipart/form-data")) {
     return NextResponse.json(
-      { error: "Content-Type must be multipart/form-data" },
+      { error: "请求的 Content-Type 必须为 multipart/form-data。" },
       { status: 415 },
     );
   }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: `Unsupported file type. Allowed types: ${allowedTypeSummary}.`,
+          error: `不支持的文件类型，仅支持：${allowedTypeSummary}。`,
         },
         { status: 415 },
       );
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: `File is too large. Maximum supported size is ${humanReadableSize(MAX_FILE_SIZE_BYTES)}.`,
+          error: `文件过大，最大支持 ${humanReadableSize(MAX_FILE_SIZE_BYTES)}。`,
         },
         { status: 413 },
       );
@@ -141,16 +141,16 @@ export async function POST(request: NextRequest) {
     if (isFileTooLargeError(error)) {
       return NextResponse.json(
         {
-          error: `File is too large. Maximum supported size is ${humanReadableSize(MAX_FILE_SIZE_BYTES)}.`,
+          error: `文件过大，最大支持 ${humanReadableSize(MAX_FILE_SIZE_BYTES)}。`,
         },
         { status: 413 },
       );
     }
 
-    if (error instanceof Error && error.message === "No file provided") {
-      return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
+    if (error instanceof Error && error.message === "缺少上传文件") {
+      return NextResponse.json({ error: "未检测到上传文件。" }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Failed to upload media." }, { status: 400 });
+    return NextResponse.json({ error: "媒体上传失败。" }, { status: 400 });
   }
 }

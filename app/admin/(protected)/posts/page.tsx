@@ -36,11 +36,11 @@ export default async function PostsPage({ searchParams = {} }: PostsPageProps) {
     <section className="space-y-8">
       <header className="flex flex-col gap-2 border-b pb-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Posts</h1>
-          <p className="text-muted-foreground">Manage your published, draft, and archived posts.</p>
+          <h1 className="text-3xl font-semibold tracking-tight">文章管理</h1>
+          <p className="text-muted-foreground">在此管理已发布、草稿和已归档的文章。</p>
         </div>
         <Button asChild>
-          <Link href="/admin/posts/new">New Post</Link>
+          <Link href="/admin/posts/new">新建文章</Link>
         </Button>
       </header>
 

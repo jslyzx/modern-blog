@@ -25,8 +25,8 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
   return (
     <section className="space-y-6">
       <header className="border-b pb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Edit Post</h1>
-        <p className="text-muted-foreground">Update post content, metadata, and settings.</p>
+        <h1 className="text-3xl font-semibold tracking-tight">编辑文章</h1>
+        <p className="text-muted-foreground">更新文章内容、元数据与相关设置。</p>
       </header>
 
       <PostForm
