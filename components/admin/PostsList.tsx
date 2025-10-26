@@ -1,7 +1,7 @@
 "use client";
 // 类型定义
-type PostStatus = 'draft' | 'published' | 'archived';
-type PostStatusFilter = PostStatus | 'all';
+type PostStatus = "draft" | "published" | "archived";
+type PostStatusFilter = PostStatus | "all";
 
 interface AdminPost {
   id: number;
@@ -16,10 +16,10 @@ interface AdminPost {
 
 // 常量
 const POST_STATUS_FILTERS: Array<{ value: PostStatusFilter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'published', label: '已发布' },
-  { value: 'draft', label: '草稿' },
-  { value: 'archived', label: '已归档' }
+  { value: "all", label: "全部" },
+  { value: "published", label: "已发布" },
+  { value: "draft", label: "草稿" },
+  { value: "archived", label: "已归档" },
 ];
 
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
@@ -41,10 +41,10 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const STATUS_LABELS: Record<PostStatusFilter, string> = {
-  all: "All",
-  published: "Published",
-  draft: "Draft",
-  archived: "Archived",
+  all: "全部",
+  published: "已发布",
+  draft: "草稿",
+  archived: "已归档",
 };
 
 const STATUS_BADGE_VARIANTS: Record<PostStatus, BadgeProps["variant"]> = {
@@ -104,7 +104,10 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
 
   const hasPosts = posts.length > 0;
 
-  const statusOptions = useMemo(() => POST_STATUS_FILTERS.map((value) => ({ value, label: STATUS_LABELS[value] })), []);
+  const statusOptions = useMemo(
+    () => POST_STATUS_FILTERS.map((item) => ({ value: item.value, label: STATUS_LABELS[item.value] })),
+    [],
+  );
 
   const updateFilters = (nextStatus: PostStatusFilter, nextSearch: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -171,7 +174,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
       }
 
       if (!response.ok) {
-        const message = typeof (payload as { error?: unknown })?.error === "string" ? payload.error : "Failed to update post status.";
+        const message = typeof (payload as { error?: unknown })?.error === "string" ? payload.error : "更新文章状态失败。";
         throw new Error(message);
       }
 
@@ -180,7 +183,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
       });
     } catch (toggleError) {
       console.error("Failed to toggle post status", toggleError);
-      setError(toggleError instanceof Error ? toggleError.message : "Failed to update post status.");
+      setError(toggleError instanceof Error ? toggleError.message : "更新文章状态失败。");
     } finally {
       setTogglingId(null);
     }
@@ -210,7 +213,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
       }
 
       if (!response.ok) {
-        const message = typeof (payload as { error?: unknown })?.error === "string" ? payload.error : "Failed to delete post.";
+        const message = typeof (payload as { error?: unknown })?.error === "string" ? payload.error : "删除文章失败。";
         throw new Error(message);
       }
 
@@ -221,7 +224,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
       });
     } catch (deleteError) {
       console.error("Failed to delete post", deleteError);
-      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete post.");
+      setError(deleteError instanceof Error ? deleteError.message : "删除文章失败。");
     } finally {
       setDeletingId(null);
     }
@@ -238,23 +241,23 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
           <Input
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
-            placeholder="Search by title"
+            placeholder="按标题搜索"
             name="search"
             className="flex-1"
           />
           {searchValue ? (
             <Button type="button" variant="ghost" onClick={handleClearSearch} disabled={isProcessing}>
-              Clear
+              清除
             </Button>
           ) : null}
           <Button type="submit" variant="secondary" disabled={isProcessing}>
-            Search
+            搜索
           </Button>
         </form>
 
         <div className="flex items-center gap-2">
           <label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground">
-            Status
+            状态
           </label>
           <select
             id="status-filter"
@@ -277,18 +280,18 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Author</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>标题</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>作者</TableHead>
+                <TableHead>创建时间</TableHead>
+                <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {posts.map((post) => {
                 const authorLabel = post.authorName ?? post.authorEmail ?? "—";
                 const badgeVariant = STATUS_BADGE_VARIANTS[post.status];
-                const toggleLabel = post.status === "published" ? "Unpublish" : "Publish";
+                const toggleLabel = post.status === "published" ? "取消发布" : "发布";
                 const canToggle = post.status === "draft" || post.status === "published";
                 const isDeleting = deletingId === post.id;
                 const isToggling = togglingId === post.id;
@@ -298,7 +301,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
                     <TableCell className="font-medium">
                       <div>
                         <div>{post.title}</div>
-                        <div className="text-xs text-muted-foreground">Slug: {post.slug}</div>
+                        <div className="text-xs text-muted-foreground">链接别名：{post.slug}</div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -309,7 +312,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
                     <TableCell>
                       <div className="flex justify-end gap-2">
                         <Button asChild variant="outline" size="sm">
-                          <Link href={`/admin/posts/${post.id}/edit`}>Edit</Link>
+                          <Link href={`/admin/posts/${post.id}/edit`}>编辑</Link>
                         </Button>
                         <Button
                           variant="ghost"
@@ -317,7 +320,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
                           onClick={() => handleToggleStatus(post)}
                           disabled={!canToggle || isToggling || isDeleting || isRefreshing}
                         >
-                          {isToggling ? "Updating..." : toggleLabel}
+                          {isToggling ? "更新中..." : toggleLabel}
                         </Button>
                         <Button
                           variant="outline"
@@ -325,7 +328,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
                           onClick={() => setDeleteTarget(post)}
                           disabled={isDeleting || isToggling || isRefreshing}
                         >
-                          Delete
+                          删除
                         </Button>
                       </div>
                     </TableCell>
@@ -337,11 +340,11 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
         </div>
       ) : (
         <div className="rounded-lg border border-dashed bg-muted/20 p-12 text-center">
-          <p className="text-sm font-medium text-foreground">No posts found</p>
+          <p className="text-sm font-medium text-foreground">暂无文章</p>
           <p className="mt-2 text-sm text-muted-foreground">
             {searchQuery || statusFilter !== "all"
-              ? "Try adjusting your filters or search to find what you are looking for."
-              : "Get started by creating your first post."}
+              ? "尝试调整筛选条件或修改搜索关键词。"
+              : "开始创建您的第一篇文章。"}
           </p>
         </div>
       )}
@@ -356,9 +359,9 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete post</DialogTitle>
+            <DialogTitle>删除文章</DialogTitle>
             <DialogDescription>
-              {deleteTarget ? `Are you sure you want to delete “${deleteTarget.title}”? This action cannot be undone.` : ""}
+              {deleteTarget ? `确定要删除“${deleteTarget.title}”吗？此操作不可撤销。` : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -368,7 +371,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
               onClick={() => setDeleteTarget(null)}
               disabled={deletingId !== null}
             >
-              Cancel
+              取消
             </Button>
             <Button
               type="button"
@@ -376,7 +379,7 @@ export default function PostsList({ posts, statusFilter, searchQuery }: PostsLis
               onClick={handleConfirmDelete}
               disabled={deletingId !== null}
             >
-              {deletingId !== null ? "Deleting..." : "Delete"}
+              {deletingId !== null ? "删除中..." : "删除"}
             </Button>
           </DialogFooter>
         </DialogContent>

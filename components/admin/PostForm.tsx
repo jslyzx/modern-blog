@@ -110,13 +110,13 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to save post");
+        throw new Error(result.error || "保存文章失败");
       }
 
       router.push("/admin/posts");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : "发生未知错误");
       setLoading(false);
     }
   };
@@ -131,45 +131,45 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="title">Title *</Label>
+          <Label htmlFor="title">标题 *</Label>
           <Input
             id="title"
             value={formData.title}
             onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="Enter post title"
+            placeholder="请输入文章标题"
             required
             disabled={loading}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="slug">Slug *</Label>
+          <Label htmlFor="slug">链接别名 *</Label>
           <Input
             id="slug"
             value={formData.slug}
             onChange={(e) => handleSlugChange(e.target.value)}
-            placeholder="post-url-slug"
+            placeholder="wenzhang-lianjie"
             required
             disabled={loading}
           />
-          <p className="text-xs text-muted-foreground">Auto-generated from title, but editable</p>
+          <p className="text-xs text-muted-foreground">将自动根据标题生成，可手动修改</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="excerpt">Summary</Label>
+        <Label htmlFor="excerpt">摘要</Label>
         <Textarea
           id="excerpt"
           value={formData.excerpt}
           onChange={(e) => setFormData((prev) => ({ ...prev, excerpt: e.target.value }))}
-          placeholder="Brief summary of the post (optional)"
+          placeholder="请输入文章简要摘要（可选）"
           rows={3}
           disabled={loading}
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="coverImageUrl">Cover Image URL</Label>
+        <Label htmlFor="coverImageUrl">封面图片地址</Label>
         <Input
           id="coverImageUrl"
           value={formData.coverImageUrl}
@@ -178,11 +178,11 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
           type="url"
           disabled={loading}
         />
-        <p className="text-xs text-muted-foreground">Upload feature can be added later</p>
+        <p className="text-xs text-muted-foreground">后续可支持上传功能</p>
       </div>
 
       <div className="space-y-2">
-        <Label>Content *</Label>
+        <Label htmlFor="content">内容 *</Label>
         <PostEditor
           content={formData.content}
           onChange={(content) => setFormData((prev) => ({ ...prev, content }))}
@@ -190,7 +190,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       </div>
 
       <div className="space-y-4 rounded-lg border p-4">
-        <h3 className="font-semibold">Tags</h3>
+        <h3 className="font-semibold">标签</h3>
         <div className="flex flex-wrap gap-2">
           {availableTags.map((tag) => (
             <button
@@ -208,33 +208,33 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
             </button>
           ))}
           {availableTags.length === 0 && (
-            <p className="text-sm text-muted-foreground">No tags available. Create tags first.</p>
+            <p className="text-sm text-muted-foreground">暂无可用标签，请先创建标签。</p>
           )}
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">状态</Label>
           <Select
             value={formData.status}
             onValueChange={(value) => setFormData((prev) => ({ ...prev, status: value as any }))}
             disabled={loading}
           >
             <SelectTrigger id="status">
-              <SelectValue />
+              <SelectValue placeholder="请选择状态" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="draft">草稿</SelectItem>
+              <SelectItem value="published">已发布</SelectItem>
+              <SelectItem value="archived">已归档</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label htmlFor="featured">Featured</Label>
+            <Label htmlFor="featured">推荐</Label>
             <Switch
               id="featured"
               checked={formData.featured}
@@ -243,7 +243,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
             />
           </div>
           <div className="flex items-center justify-between">
-            <Label htmlFor="allowComments">Allow Comments</Label>
+            <Label htmlFor="allowComments">允许评论</Label>
             <Switch
               id="allowComments"
               checked={formData.allowComments}
@@ -256,7 +256,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
 
       <div className="flex gap-3 border-t pt-6">
         <Button type="button" variant="outline" onClick={() => router.push("/admin/posts")} disabled={loading}>
-          Cancel
+          取消
         </Button>
         <Button
           type="button"
@@ -264,14 +264,14 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
           onClick={(e) => handleSubmit(e, "draft")}
           disabled={loading || !formData.title}
         >
-          Save as Draft
+          保存草稿
         </Button>
         <Button
           type="button"
           onClick={(e) => handleSubmit(e, "published")}
           disabled={loading || !formData.title}
         >
-          {loading ? "Saving..." : "Publish"}
+          {loading ? "保存中..." : postId ? "更新" : "发布"}
         </Button>
       </div>
     </form>

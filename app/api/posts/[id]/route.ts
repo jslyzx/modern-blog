@@ -31,7 +31,7 @@ const parseId = (value: string | string[] | undefined): number | null => {
   return parsed;
 };
 
-const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
 
 export async function DELETE(_request: Request, context: RouteContext) {
   const session = await auth();
@@ -43,20 +43,20 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
   }
 
   try {
     const deleted = await deletePostById(postId);
 
     if (!deleted) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete post", { postId, error });
-    return NextResponse.json({ error: "Failed to delete post." }, { status: 500 });
+    return NextResponse.json({ error: "删除文章失败。" }, { status: 500 });
   }
 }
 
@@ -70,7 +70,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
   }
 
   let payload: unknown;
@@ -79,13 +79,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse PATCH body", error);
-    return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
+    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
   }
 
   const requestedStatus = (payload as { status?: unknown })?.status;
 
   if (typeof requestedStatus !== "string" || !isPostStatus(requestedStatus)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    return NextResponse.json({ error: "状态无效" }, { status: 400 });
   }
 
   const status = requestedStatus as PostStatus;
@@ -94,13 +94,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     const updated = await updatePostStatus(postId, status);
 
     if (!updated) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, status });
   } catch (error) {
     console.error("Failed to update post status", { postId, status, error });
-    return NextResponse.json({ error: "Failed to update post status." }, { status: 500 });
+    return NextResponse.json({ error: "更新文章状态失败。" }, { status: 500 });
   }
 }
 
@@ -114,7 +114,7 @@ export async function PUT(request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
   }
 
   let payload: unknown;
@@ -123,13 +123,13 @@ export async function PUT(request: Request, context: RouteContext) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse PUT body", error);
-    return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
+    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
   }
 
   const data = payload as any;
 
   if (!data.title || typeof data.title !== "string") {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
   }
 
   try {
@@ -146,12 +146,12 @@ export async function PUT(request: Request, context: RouteContext) {
     });
 
     if (!updated) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to update post", { postId, error });
-    return NextResponse.json({ error: "Failed to update post" }, { status: 500 });
+    return NextResponse.json({ error: "更新文章失败" }, { status: 500 });
   }
 }
