@@ -4,11 +4,8 @@ import type { IncomingMessage } from "node:http";
 import { promises as fs } from "node:fs/promises";
 import { Readable } from "node:stream";
 
-import {
-  LocalMediaStorage,
-  MAX_FILE_SIZE_BYTES,
-  allowedImageMimeTypes,
-} from "@/lib/media";
+import { LocalMediaStorage } from "@/lib/media";
+import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
 
 const storage = new LocalMediaStorage();
 const allowedMimeTypesSet = new Set(allowedImageMimeTypes);

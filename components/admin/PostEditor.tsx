@@ -25,7 +25,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media";
+import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
 import { cn } from "@/lib/utils";
 
 const allowedTypes = new Set(allowedImageMimeTypes);

@@ -8,7 +8,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Bold, Image as ImageIcon, Italic, List, ListOrdered, Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media";
+import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
 import { cn } from "@/lib/utils";
 
 const allowedTypes = new Set(allowedImageMimeTypes);
