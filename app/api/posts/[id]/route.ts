@@ -1,0 +1,104 @@
+import { NextResponse } from "next/server";
+
+import { auth } from "@/auth";
+import {
+  deletePostById,
+  isPostStatus,
+  type PostStatus,
+  updatePostStatus,
+} from "@/lib/admin/posts";
+
+type RouteContext = {
+  params: {
+    id?: string | string[];
+  };
+};
+
+const parseId = (value: string | string[] | undefined): number | null => {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return unauthorized();
+  }
+
+  const postId = parseId(context.params.id);
+
+  if (!postId) {
+    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+  }
+
+  try {
+    const deleted = await deletePostById(postId);
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete post", { postId, error });
+    return NextResponse.json({ error: "Failed to delete post." }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return unauthorized();
+  }
+
+  const postId = parseId(context.params.id);
+
+  if (!postId) {
+    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = await request.json();
+  } catch (error) {
+    console.warn("Failed to parse PATCH body", error);
+    return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
+  }
+
+  const requestedStatus = (payload as { status?: unknown })?.status;
+
+  if (typeof requestedStatus !== "string" || !isPostStatus(requestedStatus)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  const status = requestedStatus as PostStatus;
+
+  try {
+    const updated = await updatePostStatus(postId, status);
+
+    if (!updated) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, status });
+  } catch (error) {
+    console.error("Failed to update post status", { postId, status, error });
+    return NextResponse.json({ error: "Failed to update post status." }, { status: 500 });
+  }
+}
