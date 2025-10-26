@@ -1,4 +1,4 @@
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "mysql2/promise";
 
 import { query } from "@/lib/db";
 
@@ -11,27 +11,32 @@ export interface AdminUser {
 
 interface AdminUserRow extends RowDataPacket {
   id: number;
+  username: string | null;
   email: string;
   password_hash: string;
-  name: string | null;
+  role: string;
+  status: string;
 }
 
 export async function findAdminByEmail(email: string): Promise<AdminUser | null> {
   const rows = await query<AdminUserRow[]>(
-    "SELECT id, email, password_hash, name FROM admin_users WHERE email = ? LIMIT 1",
+    `SELECT id, username, email, password_hash, role, status
+     FROM users
+     WHERE email = ?
+     LIMIT 1`,
     [email],
   );
 
-  if (!rows.length) {
+  const user = rows[0];
+
+  if (!user || user.role !== "admin" || user.status !== "active") {
     return null;
   }
-
-  const user = rows[0];
 
   return {
     id: user.id,
     email: user.email,
     passwordHash: user.password_hash,
-    name: user.name,
+    name: user.username,
   };
 }
