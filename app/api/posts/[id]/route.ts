@@ -5,6 +5,7 @@ import {
   deletePostById,
   isPostStatus,
   type PostStatus,
+  updatePost,
   updatePostStatus,
 } from "@/lib/admin/posts";
 
@@ -100,5 +101,57 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch (error) {
     console.error("Failed to update post status", { postId, status, error });
     return NextResponse.json({ error: "Failed to update post status." }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return unauthorized();
+  }
+
+  const postId = parseId(context.params.id);
+
+  if (!postId) {
+    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = await request.json();
+  } catch (error) {
+    console.warn("Failed to parse PUT body", error);
+    return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
+  }
+
+  const data = payload as any;
+
+  if (!data.title || typeof data.title !== "string") {
+    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  }
+
+  try {
+    const updated = await updatePost(postId, {
+      title: data.title,
+      slug: data.slug || data.title.toLowerCase().replace(/\s+/g, "-"),
+      excerpt: data.excerpt || "",
+      content: data.content || "",
+      coverImageUrl: data.coverImageUrl || "",
+      status: (data.status || "draft") as PostStatus,
+      featured: Boolean(data.featured),
+      allowComments: Boolean(data.allowComments ?? true),
+      tags: Array.isArray(data.tags) ? data.tags : [],
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to update post", { postId, error });
+    return NextResponse.json({ error: "Failed to update post" }, { status: 500 });
   }
 }
