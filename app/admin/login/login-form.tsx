@@ -29,8 +29,8 @@ export function LoginForm({ loginAction, defaultError }: LoginFormProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" autoComplete="email" placeholder="admin@example.com" required />
+            <Label htmlFor="username">Username</Label>
+            <Input id="username" name="username" type="text" autoComplete="username" placeholder="admin" required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>

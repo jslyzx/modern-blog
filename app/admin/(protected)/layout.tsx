@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     redirect("/admin/login");
   }
 
-  const userEmail = session.user.email ?? "Signed in";
+  const userLabel = session.user.name ?? session.user.email ?? "Signed in";
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
@@ -29,7 +29,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-muted-foreground sm:inline">{userEmail}</span>
+            <span className="hidden text-muted-foreground sm:inline">{userLabel}</span>
             <LogoutButton />
           </div>
         </div>

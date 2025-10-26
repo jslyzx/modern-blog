@@ -3,10 +3,13 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { verifyPassword } from "@/lib/auth";
-import { findAdminByEmail } from "@/lib/users";
+import { findAdminByUsername } from "@/lib/users";
 
 const credentialsSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  username: z
+    .string()
+    .trim()
+    .min(1, { message: "Username is required" }),
   password: z.string().min(1, { message: "Password is required" }),
 });
 
@@ -23,10 +26,10 @@ const authConfig = {
     Credentials({
       name: "Credentials",
       credentials: {
-        email: {
-          label: "Email",
-          type: "email",
-          placeholder: "admin@example.com",
+        username: {
+          label: "Username",
+          type: "text",
+          placeholder: "admin",
         },
         password: { label: "Password", type: "password" },
       },
@@ -37,12 +40,12 @@ const authConfig = {
           return null;
         }
 
-        const { email, password } = parsed.data;
+        const { username, password } = parsed.data;
 
         let user;
 
         try {
-          user = await findAdminByEmail(email);
+          user = await findAdminByUsername(username);
         } catch (error) {
           console.error("Failed to look up admin user", error);
           throw new Error("Unable to sign in at this time. Please try again later.");
@@ -60,8 +63,8 @@ const authConfig = {
 
         return {
           id: String(user.id),
-          email: user.email,
-          name: user.name ?? undefined,
+          email: user.email ?? undefined,
+          name: user.username,
         };
       },
     }),

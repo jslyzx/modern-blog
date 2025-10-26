@@ -4,39 +4,41 @@ import { query } from "@/lib/db";
 
 export interface AdminUser {
   id: number;
-  email: string;
+  username: string;
+  email: string | null;
   passwordHash: string;
-  name: string | null;
 }
 
 interface AdminUserRow extends RowDataPacket {
   id: number;
   username: string | null;
-  email: string;
+  email: string | null;
   password_hash: string;
   role: string;
   status: string;
 }
 
-export async function findAdminByEmail(email: string): Promise<AdminUser | null> {
+export async function findAdminByUsername(username: string): Promise<AdminUser | null> {
   const rows = await query<AdminUserRow[]>(
     `SELECT id, username, email, password_hash, role, status
      FROM users
-     WHERE email = ?
+     WHERE username = ?
+       AND role = 'admin'
+       AND status = 'active'
      LIMIT 1`,
-    [email],
+    [username],
   );
 
   const user = rows[0];
 
-  if (!user || user.role !== "admin" || user.status !== "active") {
+  if (!user || !user.username) {
     return null;
   }
 
   return {
     id: user.id,
+    username: user.username,
     email: user.email,
     passwordHash: user.password_hash,
-    name: user.username,
   };
 }
