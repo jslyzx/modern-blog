@@ -1,4 +1,26 @@
 "use client";
+// 类型定义
+type PostStatus = 'draft' | 'published' | 'archived';
+type PostStatusFilter = PostStatus | 'all';
+
+interface AdminPost {
+  id: number;
+  title: string;
+  slug: string;
+  status: PostStatus;
+  author_id: number;
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+}
+
+// 常量
+const POST_STATUS_FILTERS: Array<{ value: PostStatusFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'published', label: '已发布' },
+  { value: 'draft', label: '草稿' },
+  { value: 'archived', label: '已归档' }
+];
 
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
@@ -17,12 +39,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  type AdminPost,
-  type PostStatus,
-  type PostStatusFilter,
-  POST_STATUS_FILTERS,
-} from "@/lib/admin/posts";
 
 const STATUS_LABELS: Record<PostStatusFilter, string> = {
   all: "All",
