@@ -17,7 +17,7 @@ type LoginState = {
 };
 
 const errorMessages: Record<string, string> = {
-  CredentialsSignin: "Invalid email or password.",
+  CredentialsSignin: "Invalid username or password.",
   SessionRequired: "Please sign in to continue.",
 };
 
@@ -37,16 +37,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   async function loginAction(_prevState: LoginState, formData: FormData): Promise<LoginState> {
     "use server";
 
-    const email = (formData.get("email") ?? "").toString().trim();
+    const username = (formData.get("username") ?? "").toString().trim();
     const password = (formData.get("password") ?? "").toString();
 
-    if (!email || !password) {
-      return { error: "Please provide your email and password." };
+    if (!username || !password) {
+      return { error: "Please provide your username and password." };
     }
 
     try {
       await signIn("credentials", {
-        email,
+        username,
         password,
         redirectTo: callbackUrl ?? "/admin",
       });
@@ -55,7 +55,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     } catch (error) {
       if (error instanceof AuthError) {
         if (error.type === "CredentialsSignin") {
-          return { error: "Invalid email or password." };
+          return { error: "Invalid username or password." };
         }
 
         return { error: "Authentication failed. Please try again." };
