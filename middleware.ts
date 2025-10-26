@@ -1,32 +1,36 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 
-const ADMIN_LOGIN_PATH = "/admin/login";
+const ADMIN_BASE_PATH = "/admin";
+const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
 
-export default auth((req) => {
-  const { nextUrl } = req;
-  const isAdminRoute = nextUrl.pathname.startsWith("/admin");
-  const isLoginRoute = nextUrl.pathname === ADMIN_LOGIN_PATH;
+export async function middleware(request: NextRequest) {
+  const { nextUrl } = request;
+  const { pathname } = nextUrl;
 
-  if (!isAdminRoute) {
+  if (!pathname.startsWith(ADMIN_BASE_PATH)) {
     return NextResponse.next();
   }
 
-  if (req.auth?.user && isLoginRoute) {
-    return NextResponse.redirect(new URL("/admin", nextUrl.origin));
+  if (pathname === ADMIN_LOGIN_PATH) {
+    return NextResponse.next();
   }
 
-  if (!req.auth?.user && !isLoginRoute) {
+  const session = await auth(request);
+
+  if (!session?.user) {
     const loginUrl = new URL(ADMIN_LOGIN_PATH, nextUrl.origin);
-    if (nextUrl.pathname !== "/admin") {
-      loginUrl.searchParams.set("callbackUrl", nextUrl.pathname + nextUrl.search);
+
+    if (pathname !== ADMIN_BASE_PATH) {
+      loginUrl.searchParams.set("callbackUrl", pathname + nextUrl.search);
     }
+
     return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: ["/admin/:path*"],
