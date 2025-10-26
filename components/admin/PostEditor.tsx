@@ -62,6 +62,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
   const [formulaType, setFormulaType] = useState<"inline" | "block">("block");
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         history: {
