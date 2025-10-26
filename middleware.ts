@@ -1,36 +1,39 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 
 const ADMIN_BASE_PATH = "/admin";
 const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
 
-export async function middleware(request: NextRequest) {
+export default auth((request) => {
   const { nextUrl } = request;
-  const { pathname } = nextUrl;
+  const session = request.auth;
+  const { pathname, search } = nextUrl;
 
   if (!pathname.startsWith(ADMIN_BASE_PATH)) {
     return NextResponse.next();
   }
 
   if (pathname === ADMIN_LOGIN_PATH) {
+    if (session?.user) {
+      return NextResponse.redirect(new URL(ADMIN_BASE_PATH, nextUrl.origin));
+    }
+
     return NextResponse.next();
   }
-
-  const session = await auth(request);
 
   if (!session?.user) {
     const loginUrl = new URL(ADMIN_LOGIN_PATH, nextUrl.origin);
 
     if (pathname !== ADMIN_BASE_PATH) {
-      loginUrl.searchParams.set("callbackUrl", pathname + nextUrl.search);
+      loginUrl.searchParams.set("callbackUrl", pathname + (search || ""));
     }
 
     return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: ["/admin/:path*"],
