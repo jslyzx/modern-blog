@@ -147,3 +147,213 @@ export async function updatePostStatus(id: number, status: PostStatus): Promise<
 
   return result.affectedRows > 0;
 }
+
+type AdminPostDetailRow = RowDataPacket & {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  content: string;
+  cover_image_url: string | null;
+  status: string | null;
+  featured: number;
+  allow_comments: number;
+  created_at: Date | string;
+  updated_at: Date | string | null;
+  published_at: Date | string | null;
+  author_id: number | null;
+};
+
+type TagRow = RowDataPacket & {
+  id: number;
+  name: string;
+};
+
+export interface AdminPostDetail {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  coverImageUrl: string;
+  status: PostStatus;
+  featured: boolean;
+  allowComments: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+  publishedAt: string | null;
+  authorId: number | null;
+  tags: Array<{ id: number; name: string }>;
+}
+
+export async function getPostById(id: number): Promise<AdminPostDetail | null> {
+  const rows = await query<AdminPostDetailRow[]>(
+    `SELECT
+      id,
+      slug,
+      title,
+      excerpt,
+      content,
+      cover_image_url,
+      status,
+      featured,
+      allow_comments,
+      created_at,
+      updated_at,
+      published_at,
+      author_id
+    FROM posts
+    WHERE id = ?`,
+    [id],
+  );
+
+  if (!rows.length) {
+    return null;
+  }
+
+  const row = rows[0];
+
+  const tagRows = await query<TagRow[]>(
+    `SELECT t.id, t.name
+     FROM tags t
+     INNER JOIN post_tags pt ON pt.tag_id = t.id
+     WHERE pt.post_id = ?`,
+    [id],
+  );
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    excerpt: row.excerpt ?? "",
+    content: row.content,
+    coverImageUrl: row.cover_image_url ?? "",
+    status: isPostStatus(row.status) ? row.status : "draft",
+    featured: Boolean(row.featured),
+    allowComments: Boolean(row.allow_comments),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+    updatedAt: toIsoString(row.updated_at),
+    publishedAt: toIsoString(row.published_at),
+    authorId: row.author_id,
+    tags: tagRows.map((tag) => ({ id: tag.id, name: tag.name })),
+  };
+}
+
+export interface CreatePostInput {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  coverImageUrl: string;
+  status: PostStatus;
+  featured: boolean;
+  allowComments: boolean;
+  authorId: number;
+  tags: number[];
+}
+
+export async function createPost(input: CreatePostInput): Promise<number> {
+  const result = await query<ResultSetHeader>(
+    `INSERT INTO posts (
+      title,
+      slug,
+      excerpt,
+      content,
+      cover_image_url,
+      status,
+      featured,
+      allow_comments,
+      author_id,
+      published_at,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+    [
+      input.title,
+      input.slug,
+      input.excerpt,
+      input.content,
+      input.coverImageUrl || null,
+      input.status,
+      input.featured ? 1 : 0,
+      input.allowComments ? 1 : 0,
+      input.authorId,
+      input.status === "published" ? new Date() : null,
+    ],
+  );
+
+  const postId = result.insertId;
+
+  if (input.tags.length > 0) {
+    const values = input.tags.map((tagId) => [postId, tagId]);
+    await query(
+      `INSERT INTO post_tags (post_id, tag_id) VALUES ${values.map(() => "(?, ?)").join(", ")}`,
+      values.flat(),
+    );
+  }
+
+  return postId;
+}
+
+export interface UpdatePostInput {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  coverImageUrl: string;
+  status: PostStatus;
+  featured: boolean;
+  allowComments: boolean;
+  tags: number[];
+}
+
+export async function updatePost(id: number, input: UpdatePostInput): Promise<boolean> {
+  const result = await query<ResultSetHeader>(
+    `UPDATE posts SET
+      title = ?,
+      slug = ?,
+      excerpt = ?,
+      content = ?,
+      cover_image_url = ?,
+      status = ?,
+      featured = ?,
+      allow_comments = ?,
+      updated_at = NOW(),
+      published_at = CASE
+        WHEN ? = 'published' AND published_at IS NULL THEN NOW()
+        WHEN ? = 'draft' THEN NULL
+        ELSE published_at
+      END
+    WHERE id = ?`,
+    [
+      input.title,
+      input.slug,
+      input.excerpt,
+      input.content,
+      input.coverImageUrl || null,
+      input.status,
+      input.featured ? 1 : 0,
+      input.allowComments ? 1 : 0,
+      input.status,
+      input.status,
+      id,
+    ],
+  );
+
+  await query("DELETE FROM post_tags WHERE post_id = ?", [id]);
+
+  if (input.tags.length > 0) {
+    const values = input.tags.map((tagId) => [id, tagId]);
+    await query(
+      `INSERT INTO post_tags (post_id, tag_id) VALUES ${values.map(() => "(?, ?)").join(", ")}`,
+      values.flat(),
+    );
+  }
+
+  return result.affectedRows > 0;
+}
+
+export async function getAllTags(): Promise<Array<{ id: number; name: string }>> {
+  const rows = await query<TagRow[]>("SELECT id, name FROM tags ORDER BY name ASC");
+  return rows.map((row) => ({ id: row.id, name: row.name }));
+}
