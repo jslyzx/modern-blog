@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     const postId = await createPost({
       title: data.title,
       slug,
-      excerpt: data.excerpt || "",
+      summary: data.summary || "",
       content: data.content || "",
       coverImageUrl: data.coverImageUrl || "",
       status: (data.status || "draft") as PostStatus,

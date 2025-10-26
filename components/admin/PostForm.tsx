@@ -19,7 +19,7 @@ interface Tag {
 interface PostFormData {
   title: string;
   slug: string;
-  excerpt: string;
+  summary: string;
   content: string;
   coverImageUrl: string;
   status: "draft" | "published" | "archived";
@@ -51,7 +51,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
     initialData ?? {
       title: "",
       slug: "",
-      excerpt: "",
+      summary: "",
       content: "",
       coverImageUrl: "",
       status: "draft",
@@ -157,11 +157,11 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="excerpt">摘要</Label>
+        <Label htmlFor="summary">摘要</Label>
         <Textarea
-          id="excerpt"
-          value={formData.excerpt}
-          onChange={(e) => setFormData((prev) => ({ ...prev, excerpt: e.target.value }))}
+          id="summary"
+          value={formData.summary}
+          onChange={(e) => setFormData((prev) => ({ ...prev, summary: e.target.value }))}
           placeholder="请输入文章简要摘要（可选）"
           rows={3}
           disabled={loading}

@@ -136,7 +136,7 @@ export async function PUT(request: Request, context: RouteContext) {
     const updated = await updatePost(postId, {
       title: data.title,
       slug: data.slug || data.title.toLowerCase().replace(/\s+/g, "-"),
-      excerpt: data.excerpt || "",
+      summary: data.summary || "",
       content: data.content || "",
       coverImageUrl: data.coverImageUrl || "",
       status: (data.status || "draft") as PostStatus,

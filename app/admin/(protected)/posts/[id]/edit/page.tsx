@@ -34,7 +34,7 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
         initialData={{
           title: post.title,
           slug: post.slug,
-          excerpt: post.excerpt,
+          summary: post.summary,
           content: post.content,
           coverImageUrl: post.coverImageUrl,
           status: post.status,

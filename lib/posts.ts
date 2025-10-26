@@ -8,7 +8,7 @@ interface PostRow extends RowDataPacket {
   id: number;
   slug: string;
   title: string;
-  excerpt: string | null;
+  summary: string | null;
   metaDescription: string | null;
   coverImageUrl: string | null;
   canonicalUrl: string | null;
@@ -35,7 +35,7 @@ export interface PublishedPostSummary {
   id: number;
   slug: string;
   title: string;
-  excerpt: string | null;
+  summary: string | null;
   metaDescription: string | null;
   coverImageUrl: string | null;
   canonicalUrl: string | null;
@@ -70,7 +70,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => ({
   id: row.id,
   slug: row.slug,
   title: row.title,
-  excerpt: row.excerpt ?? null,
+  summary: row.summary ?? null,
   metaDescription: row.metaDescription ?? null,
   coverImageUrl: row.coverImageUrl ?? null,
   canonicalUrl: row.canonicalUrl ?? null,
@@ -84,7 +84,7 @@ const POSTS_SELECT = `
     p.id,
     p.slug,
     p.title,
-    p.excerpt,
+    p.summary AS summary,
     p.meta_description AS metaDescription,
     p.cover_image_url AS coverImageUrl,
     p.canonical_url AS canonicalUrl,
