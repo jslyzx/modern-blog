@@ -5,6 +5,12 @@ const nextConfig: NextConfig = {
   eslint: {
     dirs: ["app", "components", "lib"],
   },
+  experimental: {
+    serverComponentsExternalPackages: ["mysql2"],
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
+  },
 };
 
 export default nextConfig;
