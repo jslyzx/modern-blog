@@ -18,15 +18,15 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     href: "/admin",
-    label: "Dashboard",
+    label: "仪表盘",
   },
   {
     href: "/admin/posts",
-    label: "Posts (文章管理)",
+    label: "文章管理",
   },
   {
     href: "/admin/tags",
-    label: "Tags (标签管理)",
+    label: "标签管理",
   },
 ];
 
@@ -67,7 +67,7 @@ export default function AdminNav({ userLabel }: AdminNavProps) {
           </div>
         </div>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3 pb-6" aria-label="Admin navigation">
+      <nav className="flex flex-1 flex-col gap-1 px-3 pb-6" aria-label="管理员导航">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));

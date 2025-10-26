@@ -16,7 +16,7 @@ export function LogoutButton() {
 
   return (
     <Button variant="ghost" onClick={handleSignOut} disabled={isPending}>
-      {isPending ? "Signing out..." : "Sign out"}
+      {isPending ? "正在退出..." : "退出登录"}
     </Button>
   );
 }

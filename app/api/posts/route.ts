@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createPost, type PostStatus } from "@/lib/admin/posts";
 
-const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -18,13 +18,13 @@ export async function POST(request: Request) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse POST body", error);
-    return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
+    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
   }
 
   const data = payload as any;
 
   if (!data.title || typeof data.title !== "string") {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
   }
 
   const slug = data.slug || data.title.toLowerCase().replace(/\s+/g, "-");
@@ -46,6 +46,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id: postId });
   } catch (error) {
     console.error("Failed to create post", error);
-    return NextResponse.json({ error: "Failed to create post" }, { status: 500 });
+    return NextResponse.json({ error: "创建文章失败" }, { status: 500 });
   }
 }

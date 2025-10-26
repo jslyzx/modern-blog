@@ -9,7 +9,7 @@ interface LoginPageProps {
 }
 
 export const metadata = {
-  title: "Admin login",
+  title: "管理后台登录",
 };
 
 type LoginState = {
@@ -17,8 +17,8 @@ type LoginState = {
 };
 
 const errorMessages: Record<string, string> = {
-  CredentialsSignin: "Invalid username or password.",
-  SessionRequired: "Please sign in to continue.",
+  CredentialsSignin: "用户名或密码错误。",
+  SessionRequired: "请先登录后继续。",
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -32,7 +32,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const callbackUrlRaw = Array.isArray(callbackUrlParam) ? callbackUrlParam[0] : callbackUrlParam;
   const callbackUrl = callbackUrlRaw && callbackUrlRaw.startsWith("/") && !callbackUrlRaw.startsWith("//") ? callbackUrlRaw : undefined;
   const errorParam = searchParams?.error;
-  const defaultError = typeof errorParam === "string" ? errorMessages[errorParam] ?? "Authentication failed." : undefined;
+  const defaultError = typeof errorParam === "string" ? errorMessages[errorParam] ?? "登录失败。" : undefined;
 
   async function loginAction(_prevState: LoginState, formData: FormData): Promise<LoginState> {
     "use server";
@@ -41,7 +41,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     const password = (formData.get("password") ?? "").toString();
 
     if (!username || !password) {
-      return { error: "Please provide your username and password." };
+      return { error: "请输入用户名和密码。" };
     }
 
     try {
@@ -55,10 +55,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     } catch (error) {
       if (error instanceof AuthError) {
         if (error.type === "CredentialsSignin") {
-          return { error: "Invalid username or password." };
+          return { error: "用户名或密码错误。" };
         }
 
-        return { error: "Authentication failed. Please try again." };
+        return { error: "登录失败，请重试。" };
       }
 
       throw error;
