@@ -1,6 +1,8 @@
 import { promises as fs } from "node:fs/promises";
 import path from "node:path";
 
+import { IMAGE_MIME_EXTENSION_MAP } from "./media-config";
+
 export interface MediaUpload {
   filepath: string;
   size: number;
@@ -41,13 +43,7 @@ export class AliyunOssMediaStorage implements MediaStorageProvider {
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 const URL_PREFIX = "/uploads";
 
-const MIME_EXTENSION_MAP: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/gif": ".gif",
-  "image/webp": ".webp",
-  "image/svg+xml": ".svg",
-};
+const MIME_EXTENSION_MAP = IMAGE_MIME_EXTENSION_MAP;
 
 const sanitizeFilename = (filename: string) => {
   const normalized = filename
@@ -109,5 +105,3 @@ export class LocalMediaStorage implements MediaStorageProvider {
   }
 }
 
-export const allowedImageMimeTypes = Object.keys(MIME_EXTENSION_MAP);
-export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
