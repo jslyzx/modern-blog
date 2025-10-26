@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -168,7 +169,14 @@ export default async function PostPage({ params }: PostPageProps) {
         </header>
         {coverImage ? (
           <figure className="not-prose mb-8 overflow-hidden rounded-lg border border-border">
-            <img src={coverImage} alt={post.title} className="h-auto w-full object-cover" />
+            <Image
+              src={coverImage}
+              alt={post.title}
+              width={1200}
+              height={630}
+              className="h-auto w-full object-cover"
+              sizes="(min-width: 768px) 768px, 100vw"
+            />
           </figure>
         ) : null}
         <section dangerouslySetInnerHTML={{ __html: html }} />

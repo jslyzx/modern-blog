@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import formidable, { errors as formidableErrors, type File as FormidableFile } from "formidable";
+import type { IncomingMessage } from "node:http";
 import { promises as fs } from "node:fs/promises";
 import { Readable } from "node:stream";
 
@@ -31,11 +32,8 @@ const cleanupTempFile = async (filepath: string | undefined) => {
   }
 };
 
-type FormidableCompatibleRequest = NodeJS.ReadableStream & {
-  headers: Record<string, string>;
-  method: string;
-  url: string;
-};
+type FormidableCompatibleRequest = Readable &
+  Pick<IncomingMessage, "headers" | "method" | "url" | "httpVersion">;
 
 const toFormidableRequest = (request: NextRequest): FormidableCompatibleRequest => {
   const stream = request.body;
@@ -44,7 +42,7 @@ const toFormidableRequest = (request: NextRequest): FormidableCompatibleRequest 
       ? Readable.fromWeb(stream as unknown as ReadableStream<Uint8Array>)
       : Readable.from([]);
 
-  const headers = Object.fromEntries(request.headers.entries());
+  const headers = Object.fromEntries(request.headers.entries()) as IncomingMessage["headers"];
 
   return Object.assign(nodeStream, {
     headers,
@@ -64,7 +62,7 @@ const parseUpload = async (request: NextRequest): Promise<FormidableFile> => {
   const formidableRequest = toFormidableRequest(request);
 
   return new Promise<FormidableFile>((resolve, reject) => {
-    form.parse(formidableRequest as any, (error, _fields, files) => {
+    form.parse(formidableRequest as unknown as IncomingMessage, (error, _fields, files) => {
       if (error) {
         reject(error);
         return;

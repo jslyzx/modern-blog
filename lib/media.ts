@@ -29,10 +29,12 @@ export interface AliyunOssConfiguration {
 }
 
 export class AliyunOssMediaStorage implements MediaStorageProvider {
-  constructor(_config: AliyunOssConfiguration) {}
+  constructor(private readonly config: AliyunOssConfiguration) {}
 
   async save(): Promise<MediaUploadResult> {
-    throw new Error("Aliyun OSS media provider is not implemented yet.");
+    const { bucket } = this.config;
+
+    throw new Error(`Aliyun OSS media provider is not implemented yet for bucket "${bucket}".`);
   }
 }
 
