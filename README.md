@@ -27,33 +27,30 @@ This project provides a secure admin interface for the Modern Blog platform, bui
 
    - `NEXTAUTH_SECRET` can be generated with `openssl rand -base64 32`.
    - `NEXTAUTH_URL` should match the URL where the application is hosted.
-   - `BLOG_DB_*` variables must point to a MySQL instance that contains the `admin_users` table with at least one seeded administrator.
+   - `BLOG_DB_*` variables must point to a MySQL instance that contains the `users` table used by the admin interface.
 
 3. **Seed an administrator account**
 
-   Ensure the following table (or equivalent) exists:
-
-   ```sql
-   CREATE TABLE IF NOT EXISTS admin_users (
-     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-     email VARCHAR(255) NOT NULL UNIQUE,
-     password_hash VARCHAR(255) NOT NULL,
-     name VARCHAR(255) NULL,
-     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-   );
-   ```
-
-   Hash passwords using the same bcrypt settings as the app (12 salt rounds by default). Example in Node.js:
+   The project includes a convenience script that upserts an administrator using the configured database connection:
 
    ```bash
-   node -e "console.log(require('bcryptjs').hashSync('AdminPassword123!', 12))"
+   pnpm seed:admin
    ```
 
-   Then insert the admin user:
+   The script reads the optional `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` environment variables (falling back to `admin`, `123456`, and no email) and ensures a record exists in the `users` table with `role = 'admin'` and `status = 'active'`.
+
+   Ensure your database exposes a compatible `users` table. A minimal schema looks like:
 
    ```sql
-   INSERT INTO admin_users (email, password_hash, name)
-   VALUES ('admin@example.com', '$2a$12$...', 'Admin User');
+   CREATE TABLE IF NOT EXISTS users (
+     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+     username VARCHAR(255) NOT NULL UNIQUE,
+     email VARCHAR(255) NOT NULL UNIQUE,
+     password_hash VARCHAR(255) NOT NULL,
+     role VARCHAR(50) NOT NULL,
+     status VARCHAR(50) NOT NULL,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
    ```
 
 4. **Run in development**
@@ -109,7 +106,7 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
 | `BLOG_DB_PORT` | ✅ | MySQL port (default `3306`). |
 | `BLOG_DB_USER` | ✅ | Database user with read/write access to the admin schema. |
 | `BLOG_DB_PASSWORD` | ✅ | Password for `BLOG_DB_USER`. |
-| `BLOG_DB_NAME` | ✅ | Database/schema name that contains the `admin_users` table. |
+| `BLOG_DB_NAME` | ✅ | Database/schema name that contains the `users` table. |
 | `BLOG_DB_SSL` | ➖ | Optional flag or DSN string for SSL-enabled database connections (`true`, `false`, or a custom DSN). |
 | `DB_CONNECTION_LIMIT` | ➖ | Max connections for the MySQL pool (defaults to `10`). |
 | `BCRYPT_SALT_ROUNDS` | ➖ | Override bcrypt salt rounds for password hashing (defaults to `12`). |

@@ -51,3 +51,43 @@ describe("databaseEnv", () => {
     );
   });
 });
+
+describe("env", () => {
+  it("provides default admin values when not specified", async () => {
+    const { env } = await loadEnvModule();
+
+    expect(env).toEqual({
+      ADMIN_USERNAME: "admin",
+      ADMIN_PASSWORD: "123456",
+      ADMIN_EMAIL: null,
+    });
+  });
+
+  it("respects provided admin environment overrides", async () => {
+    const { env } = await loadEnvModule({
+      ADMIN_USERNAME: "superuser",
+      ADMIN_PASSWORD: "pa$w0rd",
+      ADMIN_EMAIL: "admin@example.com",
+    });
+
+    expect(env).toEqual({
+      ADMIN_USERNAME: "superuser",
+      ADMIN_PASSWORD: "pa$w0rd",
+      ADMIN_EMAIL: "admin@example.com",
+    });
+  });
+
+  it("normalizes blank admin values to defaults", async () => {
+    const { env } = await loadEnvModule({
+      ADMIN_USERNAME: "   ",
+      ADMIN_PASSWORD: "",
+      ADMIN_EMAIL: " ",
+    });
+
+    expect(env).toEqual({
+      ADMIN_USERNAME: "admin",
+      ADMIN_PASSWORD: "123456",
+      ADMIN_EMAIL: null,
+    });
+  });
+});
