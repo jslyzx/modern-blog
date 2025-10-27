@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PostEditor } from "@/components/admin/PostEditor";
 import { Button } from "@/components/ui/button";
@@ -94,10 +94,69 @@ const isSameFormData = (a: PostFormData | null | undefined, b: PostFormData | nu
   return a.tagIds.every((tagId, index) => tagId === b.tagIds[index]);
 };
 
+const AUTO_SAVE_DEBOUNCE_MS = 3000;
+const STORAGE_KEY_PREFIX = "admin.post.draft";
+
+const getStorageKey = (postId?: number) => `${STORAGE_KEY_PREFIX}.${postId ?? "new"}`;
+
+const serializeFormData = (data: PostFormData): string =>
+  JSON.stringify({
+    ...data,
+    tagIds: [...data.tagIds].sort((a, b) => a - b),
+  });
+
+const isValidStatus = (value: unknown): value is PostFormData["status"] =>
+  value === "draft" || value === "published" || value === "archived";
+
+const sanitizeStoredFormData = (value: unknown): PostFormData => {
+  const fallback = createEmptyFormData();
+
+  if (typeof value !== "object" || value === null) {
+    return fallback;
+  }
+
+  const data = value as Partial<PostFormData>;
+
+  return {
+    title: typeof data.title === "string" ? data.title : fallback.title,
+    slug: typeof data.slug === "string" ? data.slug : fallback.slug,
+    summary: typeof data.summary === "string" ? data.summary : fallback.summary,
+    contentHtml: typeof data.contentHtml === "string" ? data.contentHtml : fallback.contentHtml,
+    coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : fallback.coverImageUrl,
+    status: isValidStatus(data.status) ? data.status : fallback.status,
+    isFeatured: typeof data.isFeatured === "boolean" ? data.isFeatured : fallback.isFeatured,
+    allowComments: typeof data.allowComments === "boolean" ? data.allowComments : fallback.allowComments,
+    tagIds: Array.isArray(data.tagIds)
+      ? data.tagIds
+          .map((id) => {
+            if (typeof id === "number" && Number.isFinite(id)) {
+              return Math.trunc(id);
+            }
+
+            if (typeof id === "string" && id.trim()) {
+              const numeric = Number.parseInt(id, 10);
+              return Number.isFinite(numeric) ? Math.trunc(numeric) : null;
+            }
+
+            return null;
+          })
+          .filter((id): id is number => typeof id === "number" && id > 0)
+      : fallback.tagIds,
+  };
+};
+
+const formatAutoSaveTime = (timestamp: number) =>
+  new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestamp));
+
 export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   const router = useRouter();
   const isEditing = typeof postId === "number";
   const normalizedInitialTags = useMemo(() => initialTags ?? [], [initialTags]);
+  const storageKey = useMemo(() => getStorageKey(postId), [postId]);
 
   const [formData, setFormData] = useState<PostFormData | null>(() => {
     if (initialData) {
@@ -121,6 +180,18 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   const [hasLoadedTags, setHasLoadedTags] = useState(normalizedInitialTags.length > 0);
   const [newTagName, setNewTagName] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(isEditing ? "saved" : "idle");
+  const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoSavedSnapshotRef = useRef<string | null>(null);
+  const lastRemoteSnapshotRef = useRef<string | null>(null);
+  const lastErrorSnapshotRef = useRef<string | null>(null);
+  const latestFormDataRef = useRef<PostFormData | null>(null);
+  const autoSaveAbortControllerRef = useRef<AbortController | null>(null);
+  const hasAttemptedRestoreRef = useRef(false);
 
   useEffect(() => {
     if (!initialData) {
@@ -148,6 +219,348 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
     setTagOptions((prev) => mergeTagOptions(prev, normalizedInitialTags));
     setHasLoadedTags(true);
   }, [normalizedInitialTags]);
+
+  useEffect(() => {
+    if (!formData) {
+      latestFormDataRef.current = null;
+      return;
+    }
+
+    latestFormDataRef.current = formData;
+
+    const snapshot = serializeFormData(formData);
+
+    if (lastAutoSavedSnapshotRef.current === null) {
+      lastAutoSavedSnapshotRef.current = snapshot;
+    }
+
+    if (lastRemoteSnapshotRef.current === null) {
+      lastRemoteSnapshotRef.current = snapshot;
+    }
+  }, [formData]);
+
+  useEffect(() => {
+    if (!formData) {
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (hasAttemptedRestoreRef.current) {
+      return;
+    }
+
+    try {
+      const storedValue = window.localStorage.getItem(storageKey);
+
+      if (storedValue) {
+        const parsed = JSON.parse(storedValue) as { data?: unknown; updatedAt?: unknown };
+
+        if (parsed && typeof parsed === "object" && parsed.data !== undefined) {
+          const restored = sanitizeStoredFormData(parsed.data);
+          const restoredSnapshot = serializeFormData(restored);
+          const currentSnapshot = serializeFormData(formData);
+
+          if (restoredSnapshot !== currentSnapshot) {
+            const updatedAt = typeof parsed.updatedAt === "number" ? parsed.updatedAt : null;
+            const promptMessage =
+              updatedAt !== null
+                ? `检测到 ${formatAutoSaveTime(updatedAt)} 的本地草稿，是否需要恢复？`
+                : "检测到本地草稿内容，是否恢复？";
+
+            if (window.confirm(promptMessage)) {
+              setFormData(cloneFormData(restored));
+              if (updatedAt) {
+                setLastSavedAt(updatedAt);
+              }
+            } else {
+              window.localStorage.removeItem(storageKey);
+            }
+          }
+        }
+      }
+    } catch (restoreError) {
+      console.error("Failed to restore draft from localStorage", restoreError);
+    } finally {
+      hasAttemptedRestoreRef.current = true;
+    }
+  }, [formData, storageKey]);
+
+  useEffect(() => {
+    if (!formData) {
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!hasAttemptedRestoreRef.current) {
+      return;
+    }
+
+    try {
+      const payload = {
+        data: formData,
+        updatedAt: Date.now(),
+      };
+
+      window.localStorage.setItem(storageKey, JSON.stringify(payload));
+    } catch (persistError) {
+      console.error("Failed to persist draft to localStorage", persistError);
+    }
+  }, [formData, storageKey]);
+
+  const runAutoSave = useCallback(
+    async (data: PostFormData) => {
+      if (!data) {
+        return;
+      }
+
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+
+      const snapshot = serializeFormData(data);
+
+      if (lastAutoSavedSnapshotRef.current === snapshot) {
+        return;
+      }
+
+      setAutoSaveStatus("saving");
+      setAutoSaveError(null);
+
+      if (!postId) {
+        lastAutoSavedSnapshotRef.current = snapshot;
+        lastErrorSnapshotRef.current = null;
+        setAutoSaveStatus("saved");
+        setLastSavedAt(Date.now());
+
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(
+              storageKey,
+              JSON.stringify({ data: data, updatedAt: Date.now() }),
+            );
+          } catch (writeError) {
+            console.error("Failed to update draft timestamp", writeError);
+          }
+        }
+
+        return;
+      }
+
+      if (!data.title.trim()) {
+        lastErrorSnapshotRef.current = snapshot;
+        setAutoSaveStatus("error");
+        setAutoSaveError("请输入标题以保存草稿");
+        return;
+      }
+
+      autoSaveAbortControllerRef.current?.abort();
+      const controller = new AbortController();
+      autoSaveAbortControllerRef.current = controller;
+
+      try {
+        const normalizedSlug = data.slug.trim() ? generateSlug(data.slug) : generateSlug(data.title);
+        const payload = {
+          ...data,
+          slug: normalizedSlug,
+          status: "draft" as const,
+          tags: data.tagIds,
+        };
+
+        const response = await fetch(`/api/posts/${postId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        let result: any = null;
+
+        try {
+          result = await response.json();
+        } catch {
+          // ignore parse errors
+        }
+
+        if (!response.ok) {
+          const message = typeof result?.error === "string" ? result.error : "自动保存失败";
+          throw new Error(message);
+        }
+
+        lastAutoSavedSnapshotRef.current = snapshot;
+        lastRemoteSnapshotRef.current = snapshot;
+        lastErrorSnapshotRef.current = null;
+        setAutoSaveStatus("saved");
+        setLastSavedAt(Date.now());
+        setHasUnsavedChanges(false);
+        setAutoSaveError(null);
+
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(
+              storageKey,
+              JSON.stringify({ data: data, updatedAt: Date.now() }),
+            );
+          } catch (writeError) {
+            console.error("Failed to update draft timestamp", writeError);
+          }
+        }
+      } catch (err) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        console.error("Failed to auto save draft", err);
+        lastErrorSnapshotRef.current = snapshot;
+        setAutoSaveStatus("error");
+        setAutoSaveError(err instanceof Error ? err.message : "自动保存失败");
+      } finally {
+        if (autoSaveAbortControllerRef.current === controller) {
+          autoSaveAbortControllerRef.current = null;
+        }
+      }
+    },
+    [postId, storageKey],
+  );
+
+  const handleRetryAutoSave = useCallback(() => {
+    const latest = latestFormDataRef.current;
+
+    if (latest) {
+      void runAutoSave(cloneFormData(latest));
+    }
+  }, [runAutoSave]);
+
+  useEffect(() => {
+    if (autoSaveStatus !== "error") {
+      return;
+    }
+
+    if (!formData) {
+      return;
+    }
+
+    if (!lastErrorSnapshotRef.current) {
+      return;
+    }
+
+    const snapshot = serializeFormData(formData);
+
+    if (snapshot !== lastErrorSnapshotRef.current) {
+      setAutoSaveStatus("idle");
+      setAutoSaveError(null);
+      lastErrorSnapshotRef.current = null;
+    }
+  }, [autoSaveStatus, formData]);
+
+  useEffect(() => {
+    if (!formData) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    const snapshot = serializeFormData(formData);
+
+    if (autoSaveStatus === "error" && lastErrorSnapshotRef.current === snapshot) {
+      return;
+    }
+
+    const remoteSnapshot = lastRemoteSnapshotRef.current;
+    const hasRemoteChanges = remoteSnapshot === null ? true : remoteSnapshot !== snapshot;
+
+    setHasUnsavedChanges(hasRemoteChanges);
+
+    const pendingAutoSave =
+      lastAutoSavedSnapshotRef.current === null || lastAutoSavedSnapshotRef.current !== snapshot;
+
+    if (!pendingAutoSave) {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+
+      setAutoSaveStatus((prev) => {
+        if (prev === "error" || prev === "saving") {
+          return prev;
+        }
+
+        return "saved";
+      });
+
+      return;
+    }
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    if (autoSaveError && autoSaveStatus !== "error") {
+      setAutoSaveError(null);
+    }
+
+    if (autoSaveStatus !== "saving") {
+      setAutoSaveStatus("idle");
+    }
+
+    const timer = setTimeout(() => {
+      autoSaveTimeoutRef.current = null;
+      const latest = latestFormDataRef.current;
+      if (latest) {
+        void runAutoSave(cloneFormData(latest));
+      }
+    }, AUTO_SAVE_DEBOUNCE_MS);
+
+    autoSaveTimeoutRef.current = timer;
+
+    return () => {
+      clearTimeout(timer);
+      if (autoSaveTimeoutRef.current === timer) {
+        autoSaveTimeoutRef.current = null;
+      }
+    };
+  }, [formData, autoSaveError, autoSaveStatus, loading, runAutoSave]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+
+      autoSaveAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   const editorInstanceKey = postId ? `post-${postId}` : "post-new";
 
@@ -340,8 +753,17 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
       return;
     }
 
+    autoSaveAbortControllerRef.current?.abort();
+    autoSaveAbortControllerRef.current = null;
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+
     setLoading(true);
     setError(null);
+    setAutoSaveStatus("saving");
+    setAutoSaveError(null);
 
     try {
       const normalizedSlug = formData.slug.trim() ? generateSlug(formData.slug) : generateSlug(formData.title);
@@ -370,13 +792,76 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
         throw new Error(result.error || "保存文章失败");
       }
 
+      const savedSnapshot = serializeFormData({
+        ...formData,
+        slug: normalizedSlug,
+        status: submitStatus,
+      });
+
+      lastAutoSavedSnapshotRef.current = savedSnapshot;
+      lastRemoteSnapshotRef.current = savedSnapshot;
+      lastErrorSnapshotRef.current = null;
+      setAutoSaveStatus("saved");
+      setLastSavedAt(Date.now());
+      setHasUnsavedChanges(false);
+
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch (clearError) {
+          console.error("Failed to remove draft from localStorage", clearError);
+        }
+      }
+
       router.push("/admin/posts");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "发生未知错误");
+      const message = err instanceof Error ? err.message : "发生未知错误";
+      setError(message);
+      setAutoSaveStatus("error");
+      setAutoSaveError(message);
       setLoading(false);
     }
   };
+
+  const formattedLastSavedAt = useMemo(() => (lastSavedAt ? formatAutoSaveTime(lastSavedAt) : null), [lastSavedAt]);
+
+  const autoSaveIndicatorClassName = useMemo(
+    () =>
+      cn(
+        "text-xs",
+        autoSaveStatus === "error"
+          ? "text-destructive"
+          : autoSaveStatus === "saving"
+            ? "text-primary"
+            : "text-muted-foreground",
+      ),
+    [autoSaveStatus],
+  );
+
+  const autoSaveMessage = useMemo(() => {
+    if (autoSaveStatus === "saving") {
+      return "自动保存中...";
+    }
+
+    if (autoSaveStatus === "saved") {
+      if (postId) {
+        return formattedLastSavedAt ? `已自动保存（${formattedLastSavedAt}）` : "已自动保存";
+      }
+
+      if (!formattedLastSavedAt) {
+        return "草稿将在几秒后自动保存";
+      }
+
+      return `已保存到本地（${formattedLastSavedAt}）`;
+    }
+
+    if (autoSaveStatus === "error") {
+      return autoSaveError ?? "自动保存失败";
+    }
+
+    return postId ? "有未保存的更改" : "草稿将在几秒后自动保存";
+  }, [autoSaveError, autoSaveStatus, formattedLastSavedAt, postId]);
 
   if (!formData) {
     return <PostFormSkeleton />;
@@ -392,7 +877,23 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="title">标题 *</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="title">标题 *</Label>
+            <div className="flex items-center gap-2">
+              <span className={autoSaveIndicatorClassName} role="status" aria-live="polite">
+                {autoSaveMessage}
+              </span>
+              {autoSaveStatus === "error" ? (
+                <button
+                  type="button"
+                  onClick={handleRetryAutoSave}
+                  className="text-xs text-primary transition hover:underline"
+                >
+                  重试
+                </button>
+              ) : null}
+            </div>
+          </div>
           <Input
             id="title"
             value={formData.title}
