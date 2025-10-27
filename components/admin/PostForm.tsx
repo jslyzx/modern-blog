@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { generateSlug } from "@/lib/slug";
 
 interface Tag {
   id: number;
@@ -76,17 +77,6 @@ const isSameFormData = (a: PostFormData | null | undefined, b: PostFormData | nu
   return a.tags.every((tagId, index) => tagId === b.tags[index]);
 };
 
-function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/[\s_]+/g, "-")
-    .replace(/[^\w\-\u4e00-\u9fa5]+/g, "")
-    .replace(/\-\-+/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "");
-}
-
 export function PostForm({ initialData, postId, availableTags }: PostFormProps) {
   const router = useRouter();
   const isEditing = typeof postId === "number";
@@ -145,6 +135,23 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
     setFormData((prev) => (prev ? { ...prev, slug } : prev));
   };
 
+  const handleSlugBlur = () => {
+    setFormData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const trimmed = prev.slug.trim();
+
+      if (!trimmed) {
+        setAutoSlug(true);
+        return { ...prev, slug: generateSlug(prev.title) };
+      }
+
+      return { ...prev, slug: generateSlug(trimmed) };
+    });
+  };
+
   const handleTagToggle = (tagId: number) => {
     setFormData((prev) => {
       if (!prev) {
@@ -170,10 +177,12 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
     setError(null);
 
     try {
+      const normalizedSlug = formData.slug.trim() ? generateSlug(formData.slug) : generateSlug(formData.title);
+
       const payload = {
         ...formData,
         status: submitStatus,
-        slug: formData.slug || generateSlug(formData.title),
+        slug: normalizedSlug,
       };
 
       const url = postId ? `/api/posts/${postId}` : "/api/posts";
@@ -232,11 +241,12 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
             id="slug"
             value={formData.slug}
             onChange={(e) => handleSlugChange(e.target.value)}
+            onBlur={handleSlugBlur}
             placeholder="wenzhang-lianjie"
             required
             disabled={loading}
           />
-          <p className="text-xs text-muted-foreground">将自动根据标题生成，可手动修改</p>
+          <p className="text-xs text-muted-foreground">留空则自动根据标题生成（中文将转拼音）</p>
         </div>
       </div>
 
