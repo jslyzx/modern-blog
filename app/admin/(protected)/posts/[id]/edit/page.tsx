@@ -1,6 +1,7 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 
-import { PostForm } from "@/components/admin/PostForm";
+import { PostForm, PostFormSkeleton } from "@/components/admin/PostForm";
 import { getAllTags, getPostById } from "@/lib/admin/posts";
 
 type EditPostPageProps = {
@@ -16,11 +17,23 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
     notFound();
   }
 
-  const [post, tags] = await Promise.all([getPostById(postId), getAllTags()]);
+  const [post, availableTags] = await Promise.all([getPostById(postId), getAllTags()]);
 
   if (!post) {
     notFound();
   }
+
+  const initialData = {
+    title: post.title,
+    slug: post.slug,
+    summary: post.summary,
+    contentHtml: post.contentHtml,
+    coverImageUrl: post.coverImageUrl,
+    status: post.status,
+    isFeatured: post.isFeatured,
+    allowComments: post.allowComments,
+    tags: post.tags.map((tag) => tag.id),
+  };
 
   return (
     <section className="space-y-6">
@@ -29,21 +42,9 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
         <p className="text-muted-foreground">更新文章内容、元数据与相关设置。</p>
       </header>
 
-      <PostForm
-        postId={post.id}
-        initialData={{
-          title: post.title,
-          slug: post.slug,
-          summary: post.summary,
-          contentHtml: post.contentHtml,
-          coverImageUrl: post.coverImageUrl,
-          status: post.status,
-          isFeatured: post.isFeatured,
-          allowComments: post.allowComments,
-          tags: post.tags.map((t) => t.id),
-        }}
-        availableTags={tags}
-      />
+      <Suspense fallback={<PostFormSkeleton />}>
+        <PostForm postId={post.id} initialData={initialData} availableTags={availableTags} />
+      </Suspense>
     </section>
   );
 }

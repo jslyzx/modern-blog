@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { PostEditor } from "@/components/admin/PostEditor";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,48 @@ interface PostFormProps {
   availableTags: Tag[];
 }
 
+const createEmptyFormData = (): PostFormData => ({
+  title: "",
+  slug: "",
+  summary: "",
+  contentHtml: "",
+  coverImageUrl: "",
+  status: "draft",
+  isFeatured: false,
+  allowComments: true,
+  tags: [],
+});
+
+const cloneFormData = (data: PostFormData): PostFormData => ({
+  ...data,
+  tags: [...data.tags],
+});
+
+const isSameFormData = (a: PostFormData | null | undefined, b: PostFormData | null | undefined): boolean => {
+  if (!a || !b) {
+    return false;
+  }
+
+  if (
+    a.title !== b.title ||
+    a.slug !== b.slug ||
+    a.summary !== b.summary ||
+    a.contentHtml !== b.contentHtml ||
+    a.coverImageUrl !== b.coverImageUrl ||
+    a.status !== b.status ||
+    a.isFeatured !== b.isFeatured ||
+    a.allowComments !== b.allowComments
+  ) {
+    return false;
+  }
+
+  if (a.tags.length !== b.tags.length) {
+    return false;
+  }
+
+  return a.tags.every((tagId, index) => tagId === b.tags[index]);
+};
+
 function generateSlug(title: string): string {
   return title
     .toLowerCase()
@@ -47,45 +89,83 @@ function generateSlug(title: string): string {
 
 export function PostForm({ initialData, postId, availableTags }: PostFormProps) {
   const router = useRouter();
-  const [formData, setFormData] = useState<PostFormData>(
-    initialData ?? {
-      title: "",
-      slug: "",
-      summary: "",
-      contentHtml: "",
-      coverImageUrl: "",
-      status: "draft",
-      isFeatured: false,
-      allowComments: true,
-      tags: [],
-    },
-  );
+  const isEditing = typeof postId === "number";
+
+  const [formData, setFormData] = useState<PostFormData | null>(() => {
+    if (initialData) {
+      return cloneFormData(initialData);
+    }
+
+    if (isEditing) {
+      return null;
+    }
+
+    return createEmptyFormData();
+  });
   const [autoSlug, setAutoSlug] = useState(!initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!initialData) {
+      if (!isEditing) {
+        setFormData((prev) => (prev === null ? createEmptyFormData() : prev));
+      }
+      return;
+    }
+
+    setFormData((prev) => {
+      if (isSameFormData(prev, initialData)) {
+        return prev;
+      }
+
+      return cloneFormData(initialData);
+    });
+    setAutoSlug(false);
+  }, [initialData, isEditing]);
+
+  const editorInstanceKey = postId ? `post-${postId}` : "post-new";
+
   const handleTitleChange = (title: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      title,
-      slug: autoSlug ? generateSlug(title) : prev.slug,
-    }));
+    setFormData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        title,
+        slug: autoSlug ? generateSlug(title) : prev.slug,
+      };
+    });
   };
 
   const handleSlugChange = (slug: string) => {
     setAutoSlug(false);
-    setFormData((prev) => ({ ...prev, slug }));
+    setFormData((prev) => (prev ? { ...prev, slug } : prev));
   };
 
   const handleTagToggle = (tagId: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      tags: prev.tags.includes(tagId) ? prev.tags.filter((id) => id !== tagId) : [...prev.tags, tagId],
-    }));
+    setFormData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const tags = prev.tags.includes(tagId)
+        ? prev.tags.filter((id) => id !== tagId)
+        : [...prev.tags, tagId];
+
+      return { ...prev, tags };
+    });
   };
 
   const handleSubmit = async (e: FormEvent, submitStatus: "draft" | "published") => {
     e.preventDefault();
+
+    if (!formData) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -120,6 +200,10 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       setLoading(false);
     }
   };
+
+  if (!formData) {
+    return <PostFormSkeleton />;
+  }
 
   return (
     <form className="space-y-6">
@@ -161,7 +245,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
         <Textarea
           id="summary"
           value={formData.summary}
-          onChange={(e) => setFormData((prev) => ({ ...prev, summary: e.target.value }))}
+          onChange={(e) => setFormData((prev) => (prev ? { ...prev, summary: e.target.value } : prev))}
           placeholder="请输入文章简要摘要（可选）"
           rows={3}
           disabled={loading}
@@ -173,7 +257,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
         <Input
           id="coverImageUrl"
           value={formData.coverImageUrl}
-          onChange={(e) => setFormData((prev) => ({ ...prev, coverImageUrl: e.target.value }))}
+          onChange={(e) => setFormData((prev) => (prev ? { ...prev, coverImageUrl: e.target.value } : prev))}
           placeholder="https://example.com/image.jpg"
           type="url"
           disabled={loading}
@@ -184,8 +268,10 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       <div className="space-y-2">
         <Label htmlFor="content">内容 *</Label>
         <PostEditor
-          content={formData.contentHtml}
-          onChange={(content) => setFormData((prev) => ({ ...prev, contentHtml: content }))}
+          key={editorInstanceKey}
+          editorKey={editorInstanceKey}
+          contentHtml={formData.contentHtml}
+          onChange={(content) => setFormData((prev) => (prev ? { ...prev, contentHtml: content } : prev))}
         />
       </div>
 
@@ -218,7 +304,9 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
           <Label htmlFor="status">状态</Label>
           <Select
             value={formData.status}
-            onValueChange={(value) => setFormData((prev) => ({ ...prev, status: value as any }))}
+            onValueChange={(value) =>
+              setFormData((prev) => (prev ? { ...prev, status: value as PostFormData["status"] } : prev))
+            }
             disabled={loading}
           >
             <SelectTrigger id="status">
@@ -238,7 +326,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
             <Switch
               id="isFeatured"
               checked={formData.isFeatured}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isFeatured: checked }))}
+              onCheckedChange={(checked) => setFormData((prev) => (prev ? { ...prev, isFeatured: checked } : prev))}
               disabled={loading}
             />
           </div>
@@ -247,7 +335,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
             <Switch
               id="allowComments"
               checked={formData.allowComments}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, allowComments: checked }))}
+              onCheckedChange={(checked) => setFormData((prev) => (prev ? { ...prev, allowComments: checked } : prev))}
               disabled={loading}
             />
           </div>
@@ -275,5 +363,71 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
         </Button>
       </div>
     </form>
+  );
+}
+
+export function PostFormSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse" aria-hidden="true">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-2">
+          <div className="h-4 w-20 rounded bg-muted" />
+          <div className="h-10 rounded bg-muted" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 w-24 rounded bg-muted" />
+          <div className="h-10 rounded bg-muted" />
+          <div className="h-3 w-32 rounded bg-muted/70" />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="h-4 w-16 rounded bg-muted" />
+        <div className="h-24 rounded bg-muted" />
+      </div>
+
+      <div className="space-y-2">
+        <div className="h-4 w-32 rounded bg-muted" />
+        <div className="h-10 rounded bg-muted" />
+        <div className="h-3 w-40 rounded bg-muted/70" />
+      </div>
+
+      <div className="space-y-2">
+        <div className="h-4 w-20 rounded bg-muted" />
+        <div className="h-[320px] rounded border bg-muted/60" />
+      </div>
+
+      <div className="space-y-4 rounded-lg border p-4">
+        <div className="h-5 w-12 rounded bg-muted" />
+        <div className="flex flex-wrap gap-2">
+          <div className="h-7 w-16 rounded-full border bg-muted" />
+          <div className="h-7 w-14 rounded-full border bg-muted" />
+          <div className="h-7 w-20 rounded-full border bg-muted" />
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-2">
+          <div className="h-4 w-16 rounded bg-muted" />
+          <div className="h-10 rounded bg-muted" />
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="h-4 w-16 rounded bg-muted" />
+            <div className="h-6 w-10 rounded-full bg-muted" />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="h-4 w-20 rounded bg-muted" />
+            <div className="h-6 w-10 rounded-full bg-muted" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-3 border-t pt-6">
+        <div className="h-10 w-20 rounded bg-muted" />
+        <div className="h-10 w-24 rounded bg-muted" />
+        <div className="h-10 w-16 rounded bg-muted" />
+      </div>
+    </div>
   );
 }

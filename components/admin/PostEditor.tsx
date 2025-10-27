@@ -50,54 +50,71 @@ const toolbarButtonClasses = (active?: boolean) =>
   );
 
 interface PostEditorProps {
-  content: string;
+  contentHtml: string;
+  editorKey?: string;
   onChange: (content: string) => void;
 }
 
-export function PostEditor({ content, onChange }: PostEditorProps) {
+export function PostEditor({ contentHtml, editorKey, onChange }: PostEditorProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [showFormulaDialog, setShowFormulaDialog] = useState(false);
   const [formulaContent, setFormulaContent] = useState("");
   const [formulaType, setFormulaType] = useState<"inline" | "block">("block");
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        history: {
-          depth: 100,
-        },
-        heading: {
-          levels: [1, 2, 3],
-        },
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "text-primary underline",
-        },
-      }),
-      Image.configure({
-        HTMLAttributes: {
-          class: "my-4 rounded-md max-w-full",
-        },
-      }),
-      Placeholder.configure({
-        placeholder: "开始撰写文章内容...",
-      }),
-    ],
-    content,
-    onUpdate({ editor }) {
-      onChange(editor.getHTML());
+  const resolvedEditorKey = editorKey ?? "post-editor";
+  const normalizedContent = contentHtml || "";
+  const lastSyncedContentRef = useRef<string>(normalizedContent);
+
+  const editor = useEditor(
+    {
+      immediatelyRender: false,
+      extensions: [
+        StarterKit.configure({
+          history: {
+            depth: 100,
+          },
+          heading: {
+            levels: [1, 2, 3],
+          },
+        }),
+        Link.configure({
+          openOnClick: false,
+          HTMLAttributes: {
+            class: "text-primary underline",
+          },
+        }),
+        Image.configure({
+          HTMLAttributes: {
+            class: "my-4 rounded-md max-w-full",
+          },
+        }),
+        Placeholder.configure({
+          placeholder: "开始撰写文章内容...",
+        }),
+      ],
+      content: normalizedContent,
+      onUpdate({ editor }) {
+        const nextHtml = editor.getHTML();
+        lastSyncedContentRef.current = nextHtml;
+        onChange(nextHtml);
+      },
     },
-  });
+    [resolvedEditorKey],
+  );
 
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+    if (!editor) {
+      return;
     }
-  }, [editor, content]);
+
+    if (lastSyncedContentRef.current === normalizedContent) {
+      return;
+    }
+
+    editor.commands.setContent(normalizedContent, false);
+    lastSyncedContentRef.current = normalizedContent;
+  }, [editor, normalizedContent]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -334,7 +351,7 @@ export function PostEditor({ content, onChange }: PostEditorProps) {
           </div>
         </div>
         <div className="mt-4 rounded-md border">
-          <EditorContent editor={editor} className="editor-content min-h-[300px] px-3 py-4" />
+          <EditorContent key={resolvedEditorKey} editor={editor} className="editor-content min-h-[300px] px-3 py-4" />
         </div>
         {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
         <p className="mt-2 text-xs text-muted-foreground">
