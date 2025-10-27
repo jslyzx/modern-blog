@@ -1,11 +1,6 @@
-import { markdownToHtml } from "@/lib/markdown";
 import { getPublishedPosts } from "@/lib/posts";
-import {
-  createAbsoluteUrl,
-  ensureAbsoluteUrl,
-  getSiteDescription,
-  getSiteName,
-} from "@/lib/site";
+import { buildPostPath } from "@/lib/paths";
+import { createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
 
 const RSS_ITEM_LIMIT = 20;
 
@@ -24,14 +19,12 @@ const toRssDate = (value?: Date | null): string => {
   return date.toUTCString();
 };
 
-const buildSummaryHtml = (markdown: string): string => {
-  const html = markdownToHtml(markdown);
-
-  if (!html) {
+const extractFirstParagraph = (html: string): string => {
+  if (!html?.trim()) {
     return "";
   }
 
-  const paragraphMatch = html.match(/<p>[\s\S]*?<\/p>/);
+  const paragraphMatch = html.match(/<p[\s>][\s\S]*?<\/p>/i);
 
   return paragraphMatch ? paragraphMatch[0] : html;
 };
@@ -39,25 +32,28 @@ const buildSummaryHtml = (markdown: string): string => {
 export const revalidate = 3600;
 
 export async function GET() {
-  const posts = await getPublishedPosts(RSS_ITEM_LIMIT);
+  const posts = await getPublishedPosts({ limit: RSS_ITEM_LIMIT });
   const siteName = getSiteName();
   const siteDescription = getSiteDescription();
   const siteUrl = createAbsoluteUrl("/");
 
   const items = posts
     .map((post) => {
-      const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/posts/${post.slug}`);
-      const summarySource = post.excerpt ?? post.content;
-      const summaryHtml = buildSummaryHtml(summarySource) || markdownToHtml(summarySource) || `<p>${escapeXml(post.title)}</p>`;
+      const link = createAbsoluteUrl(buildPostPath(post.slug));
+      const summaryText = post.summary?.trim() ?? "";
+      const summaryHtml = summaryText
+        ? `<p>${escapeXml(summaryText)}</p>`
+        : extractFirstParagraph(post.contentHtml) || `<p>${escapeXml(post.title)}</p>`;
       const cdata = sanitizeCdata(summaryHtml);
       const publishedAt = toRssDate(post.publishedAt);
       const guidSeed = post.updatedAt?.getTime() ?? post.publishedAt?.getTime() ?? post.id;
+      const guidValue = `${link}#${guidSeed}`;
 
       return `
         <item>
           <title>${escapeXml(post.title)}</title>
           <link>${escapeXml(link)}</link>
-          <guid isPermaLink="false">${escapeXml(`${link}#${guidSeed}`)}</guid>
+          <guid isPermaLink="false">${escapeXml(guidValue)}</guid>
           <description><![CDATA[${cdata}]]></description>
           <pubDate>${publishedAt}</pubDate>
         </item>

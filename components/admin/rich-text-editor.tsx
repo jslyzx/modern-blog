@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media";
+import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
 import { cn } from "@/lib/utils";
 
 import "katex/dist/katex.min.css";
@@ -110,11 +110,11 @@ export function RichTextEditor({ value, onChange, placeholder = "Write your post
 
   const validateFile = useCallback((file: File) => {
     if (!allowedTypes.has(file.type)) {
-      return `Unsupported file type. Allowed types: ${allowedTypeLabels.join(", ")}.`;
+      return `不支持的文件类型，仅支持：${allowedTypeLabels.join(", ")}。`;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return `File is too large. Maximum size is ${humanFileSize(MAX_FILE_SIZE_BYTES)}.`;
+      return `文件过大，最大限制为 ${humanFileSize(MAX_FILE_SIZE_BYTES)}。`;
     }
 
     return null;
@@ -144,20 +144,20 @@ export function RichTextEditor({ value, onChange, placeholder = "Write your post
         const payload = await response.json();
 
         if (!response.ok) {
-          const message = typeof payload?.error === "string" ? payload.error : "Upload failed.";
+          const message = typeof payload?.error === "string" ? payload.error : "上传失败。";
           setError(message);
           return;
         }
 
         if (!payload?.url) {
-          setError("Upload failed: missing URL in response.");
+          setError("上传失败：响应缺少 URL。");
           return;
         }
 
         editor?.chain().focus().setImage({ src: payload.url, alt: file.name }).run();
       } catch (uploadError) {
         console.error("Failed to upload image", uploadError);
-        setError("Upload failed. Please try again.");
+        setError("上传失败，请重试。");
       } finally {
         setUploading(false);
       }
@@ -302,7 +302,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Write your post
             />
             <Button type="button" variant="outline" onClick={triggerFileBrowser} disabled={uploading || disabled}>
               <ImageIcon className="mr-2 h-4 w-4" />
-              {uploading ? "Uploading..." : "Insert image"}
+              {uploading ? "上传中..." : "插入图片"}
             </Button>
           </div>
         </div>
@@ -311,7 +311,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Write your post
         </div>
         {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
         <p className="mt-2 text-xs text-muted-foreground">
-          Accepted types: {allowedTypeLabels.join(", ")} · Max size {humanFileSize(MAX_FILE_SIZE_BYTES)}
+          支持的格式：{allowedTypeLabels.join(", ")} · 最大体积 {humanFileSize(MAX_FILE_SIZE_BYTES)}
         </p>
       </div>
     </div>

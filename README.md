@@ -15,6 +15,7 @@ This project provides a secure admin interface for the Modern Blog platform, bui
    ```bash
    NEXTAUTH_URL=http://localhost:3000
    NEXTAUTH_SECRET=your-generated-secret
+   SITE_BASE_URL=http://localhost:3000
    BLOG_DB_HOST=127.0.0.1
    BLOG_DB_PORT=3306
    BLOG_DB_USER=root
@@ -27,6 +28,7 @@ This project provides a secure admin interface for the Modern Blog platform, bui
 
    - `NEXTAUTH_SECRET` can be generated with `openssl rand -base64 32`.
    - `NEXTAUTH_URL` should match the URL where the application is hosted.
+   - `SITE_BASE_URL` must include the protocol (`http://` or `https://`) and is used for canonical URLs, the sitemap, and the RSS feed.
    - `BLOG_DB_*` variables must point to a MySQL instance that contains the `users` table used by the admin interface.
 
 3. **Seed an administrator account**
@@ -94,7 +96,7 @@ A GitHub Actions workflow is defined at `.github/workflows/ci.yml`. It installs 
 
 ## Deployment notes
 
-Session cookies are managed automatically by NextAuth and scoped to HTTPS in production. Ensure TLS termination (for example, with Nginx on Alibaba Cloud) so cookies remain secure.
+Session cookies are managed automatically by NextAuth and scoped to HTTPS in production. The sample Nginx configuration included in this repository listens on port 80 so you can verify the deployment over HTTP first, but you should still plan to terminate TLS (for example, with Nginx on Alibaba Cloud or a cloud load balancer) before exposing the admin interface publicly.
 
 ## Required environment variables
 
@@ -102,6 +104,7 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
 | --- | --- | --- |
 | `NEXTAUTH_SECRET` | ✅ | Secret used by NextAuth to sign and encrypt session tokens. Generate with `openssl rand -base64 32`. |
 | `NEXTAUTH_URL` | ✅ | Public URL of the admin interface (e.g. `https://admin.example.com`). |
+| `SITE_BASE_URL` | ✅ | Base URL used for canonical links, the sitemap, and RSS feed (include protocol, e.g. `http://blog.example.com`). |
 | `BLOG_DB_HOST` | ✅ | Hostname or IP of the MySQL instance. |
 | `BLOG_DB_PORT` | ✅ | MySQL port (default `3306`). |
 | `BLOG_DB_USER` | ✅ | Database user with read/write access to the admin schema. |
@@ -122,7 +125,7 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
 
 ### Firewall and networking
 
-1. In the Alibaba Cloud security group for your ECS instance, allow inbound TCP traffic on ports **80/443** for web traffic and restrict port **3000** to internal traffic only (if the reverse proxy terminates TLS).
+1. In the Alibaba Cloud security group for your ECS instance, allow inbound TCP traffic on port **80** for web traffic (add **443** when you enable HTTPS) and restrict port **3000** to internal traffic only (if the reverse proxy terminates TLS).
 2. Allow outbound connections on port **3306** (or your MySQL port) so the app can reach the RDS instance.
 3. If using Docker Compose, ensure the bridge network does not conflict with existing VPC CIDR ranges.
 
@@ -133,6 +136,7 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
    cat <<'EOF' > .env.production
    NEXTAUTH_SECRET="$(openssl rand -base64 32)"
    NEXTAUTH_URL=https://admin.example.com
+   SITE_BASE_URL=http://your-domain-or-ip
    BLOG_DB_HOST=db.internal
    BLOG_DB_PORT=3306
    BLOG_DB_USER=modern_blog
@@ -140,7 +144,7 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
    BLOG_DB_NAME=modern_blog
    BLOG_DB_SSL=false
    EOF
-   ```
+
 2. Build and tag the image locally or in a CI pipeline:
    ```bash
    docker build -t modern-blog-admin:latest .
@@ -150,18 +154,20 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
    ```bash
    docker compose --env-file .env.production up -d --build
    ```
-   The application will be available on port `3000` inside the container. Use the Nginx configuration below to expose it on ports 80/443.
+   The application will be available on port `3000` inside the container. Use the Nginx configuration below to expose it on port 80 (add a TLS-enabled server block when you are ready for HTTPS).
 
 ### Nginx reverse proxy
 
 - Place the sample configuration from `deploy/nginx.conf` under `/etc/nginx/conf.d/modern-blog-admin.conf` (or similar).
-- Update `server_name`, certificate paths, and upstream IPs to match your ECS instance or internal load balancer.
+- Ensure the `SITE_BASE_URL` environment variable matches the domain you configure here (include the `http://` prefix when serving over HTTP).
+- Update `server_name` and the upstream address to match your ECS instance or internal load balancer.
 - Reload Nginx:
   ```bash
   sudo nginx -t
   sudo systemctl reload nginx
   ```
 - The configuration enables gzip compression, sets long-lived cache headers for Next.js static assets, and forwards the appropriate proxy headers required by Next.js and NextAuth.
+- When you are ready to serve traffic over HTTPS, add a separate server block that listens on port 443 with your TLS certificate, or terminate TLS in front of this server (for example, with Alibaba Cloud SLB).
 
 ### Persisting media uploads
 

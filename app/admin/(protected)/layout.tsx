@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     redirect("/admin/login");
   }
 
-  const userLabel = session.user.name ?? session.user.email ?? "Signed in";
+  const userLabel = session.user.name ?? session.user.email ?? "已登录用户";
 
   return (
     <div className="min-h-screen bg-muted/30 lg:flex">
