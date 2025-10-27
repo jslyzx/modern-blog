@@ -8,7 +8,7 @@ const META_DESCRIPTION_MAX_LENGTH = 160;
 
 interface PostRow extends RowDataPacket {
   id: number;
-  slug: string;
+  slug: string | null;
   title: string;
   summary: string | null;
   coverImageUrl: string | null;
@@ -121,10 +121,11 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
   const summary = normalizeNullableText(row.summary);
   const contentHtml = row.contentHtml ?? "";
   const metaDescription = deriveMetaDescription(summary, contentHtml);
+  const slug = (row.slug ?? "").trim();
 
   return {
     id: row.id,
-    slug: row.slug,
+    slug,
     title: row.title,
     summary,
     metaDescription,
@@ -190,11 +191,13 @@ export const getPublishedPosts = async (
 };
 
 export const getPublishedPostSlugs = async (): Promise<string[]> => {
-  const rows = await query<Array<RowDataPacket & { slug: string }>>(
+  const rows = await query<Array<RowDataPacket & { slug: string | null }>>(
     `SELECT p.slug FROM posts p WHERE ${PUBLISHED_POST_CONDITION} ORDER BY COALESCE(p.published_at, p.created_at) DESC`,
   );
 
-  return rows.map((row) => row.slug);
+  return rows
+    .map((row) => row.slug?.trim())
+    .filter((slug): slug is string => Boolean(slug));
 };
 
 const getTagsForPost = async (postId: number): Promise<PublishedTag[]> => {

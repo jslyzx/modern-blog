@@ -3,7 +3,8 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import { getPublishedPosts, type PublishedPostSummary } from "@/lib/posts";
-import { buildPostPath, ensureAbsoluteUrl } from "@/lib/site";
+import { buildPostPath } from "@/lib/paths";
+import { ensureAbsoluteUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -62,12 +63,13 @@ function FeaturedPost({ post }: { post: PublishedPostSummary }) {
   const coverImage = getCoverImage(post);
   const date = getDateForPost(post);
   const dateLabel = formatDateLabel(date);
+  const slug = post.slug.trim();
+  const hasSlug = slug.length > 0;
+  const containerClassName =
+    "group block overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:border-primary/40 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2";
 
-  return (
-    <Link
-      href={buildPostPath(post.slug)}
-      className="group block overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:border-primary/40 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-    >
+  const content = (
+    <>
       {coverImage ? (
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
           <img
@@ -92,6 +94,16 @@ function FeaturedPost({ post }: { post: PublishedPostSummary }) {
           </div>
         ) : null}
       </div>
+    </>
+  );
+
+  if (!hasSlug) {
+    return <article className={containerClassName}>{content}</article>;
+  }
+
+  return (
+    <Link href={buildPostPath(slug)} className={containerClassName}>
+      {content}
     </Link>
   );
 }
@@ -101,12 +113,13 @@ function PostCard({ post }: { post: PublishedPostSummary }) {
   const coverImage = getCoverImage(post);
   const date = getDateForPost(post);
   const dateLabel = formatDateLabel(date);
+  const slug = post.slug.trim();
+  const hasSlug = slug.length > 0;
+  const containerClassName =
+    "group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:border-primary/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2";
 
-  return (
-    <Link
-      href={buildPostPath(post.slug)}
-      className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:border-primary/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-    >
+  const content = (
+    <>
       {coverImage ? (
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
           <img
@@ -128,6 +141,16 @@ function PostCard({ post }: { post: PublishedPostSummary }) {
           </div>
         ) : null}
       </div>
+    </>
+  );
+
+  if (!hasSlug) {
+    return <article className={containerClassName}>{content}</article>;
+  }
+
+  return (
+    <Link href={buildPostPath(slug)} className={containerClassName}>
+      {content}
     </Link>
   );
 }
