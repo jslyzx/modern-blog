@@ -121,7 +121,8 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
   const summary = normalizeNullableText(row.summary);
   const contentHtml = row.contentHtml ?? "";
   const metaDescription = deriveMetaDescription(summary, contentHtml);
-  const slug = (row.slug ?? "").trim();
+  const rawSlug = (row.slug ?? "").trim();
+  const slug = rawSlug.replace(/^\/+/, "");
 
   return {
     id: row.id,

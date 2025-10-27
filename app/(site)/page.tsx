@@ -58,13 +58,18 @@ const formatDateLabel = (date: Date | null): string | null => {
 
 const getCoverImage = (post: PublishedPostSummary): string | null => ensureAbsoluteUrl(post.coverImageUrl);
 
+const getSlugForPost = (post: PublishedPostSummary): string | null => {
+  const slug = post.slug.trim();
+
+  return slug.length > 0 ? slug : null;
+};
+
 function FeaturedPost({ post }: { post: PublishedPostSummary }) {
   const summary = getSummary(post);
   const coverImage = getCoverImage(post);
   const date = getDateForPost(post);
   const dateLabel = formatDateLabel(date);
-  const slug = post.slug.trim();
-  const hasSlug = slug.length > 0;
+  const slug = getSlugForPost(post);
   const containerClassName =
     "group block overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:border-primary/40 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2";
 
@@ -97,7 +102,7 @@ function FeaturedPost({ post }: { post: PublishedPostSummary }) {
     </>
   );
 
-  if (!hasSlug) {
+  if (!slug) {
     return <article className={containerClassName}>{content}</article>;
   }
 
@@ -113,8 +118,7 @@ function PostCard({ post }: { post: PublishedPostSummary }) {
   const coverImage = getCoverImage(post);
   const date = getDateForPost(post);
   const dateLabel = formatDateLabel(date);
-  const slug = post.slug.trim();
-  const hasSlug = slug.length > 0;
+  const slug = getSlugForPost(post);
   const containerClassName =
     "group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:border-primary/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2";
 
@@ -144,7 +148,7 @@ function PostCard({ post }: { post: PublishedPostSummary }) {
     </>
   );
 
-  if (!hasSlug) {
+  if (!slug) {
     return <article className={containerClassName}>{content}</article>;
   }
 
