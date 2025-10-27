@@ -1,216 +1,311 @@
 # Modern Blog Admin
 
-This project provides a secure admin interface for the Modern Blog platform, built with Next.js App Router and credentials-based authentication powered by NextAuth.js.
+Modern Blog Admin is a secure operations console for the Modern Blog platform. It is built on the Next.js App Router and ships with credential based authentication, rich content tooling, MySQL integrations, and production-ready deployment assets so editors can manage posts, tags, media, and SEO primitives confidently.
 
-## Getting started
+## Table of contents
 
-1. **Install dependencies**
+- [Overview](#overview)
+  - [Tech stack](#tech-stack)
+- [Quick start](#quick-start)
+- [Environment configuration](#environment-configuration)
+- [Database schema and migrations](#database-schema-and-migrations)
+- [Feature checklist](#feature-checklist)
+- [Development workflow](#development-workflow)
+- [Testing & quality checks](#testing--quality-checks)
+- [Deployment](#deployment)
+  - [Build a production image](#build-a-production-image)
+  - [Deploy with Docker Compose](#deploy-with-docker-compose)
+  - [Nginx reverse proxy](#nginx-reverse-proxy)
+  - [Alibaba Cloud HTTP quick start](#alibaba-cloud-http-quick-start)
+  - [Optional systemd service](#optional-systemd-service)
+- [Troubleshooting](#troubleshooting)
 
+## Overview
+
+The admin panel exposes CRUD tooling for posts and tags, media uploads with strict sanitisation, live post search, and operational dashboards. Editors authenticate with credentials managed through NextAuth.js and the interface persists content to a MySQL database. All routing is implemented in the Next.js App Router, so SSR, streaming, metadata, and route handlers are first-class citizens.
+
+### Tech stack
+
+- **Runtime**: Next.js 14 (App Router) on Node.js 20
+- **Language**: TypeScript with Vitest for testing
+- **Package manager**: pnpm (Corepack-enabled)
+- **UI**: Tailwind CSS, Radix UI primitives, Shadcn-inspired components, Lucide icons
+- **Content tooling**: Tiptap rich text editor, Markdown + KaTeX rendering, Shiki syntax highlighting
+- **Authentication**: NextAuth.js Credentials provider with bcrypt hashing
+- **Database**: MySQL 8 via `mysql2`, pooled connections, Zod-validated environment configuration
+- **Media**: Local disk storage under `public/uploads` with server-side validation via `formidable` and `sharp`
+- **Ops**: Dockerfile, `docker-compose.yml`, deployable Nginx config, and optional systemd unit
+
+## Quick start
+
+> **Prerequisites**
+>
+> - Node.js 20.x (use `nvm install 20` or download from nodejs.org)
+> - pnpm 9 (enable via `corepack enable` and `corepack prepare pnpm@9.12.2 --activate`)
+> - MySQL 8 (local install or Docker)
+> - OpenSSL (to generate secrets)
+
+1. **Clone and install dependencies**
    ```bash
+   git clone <your-fork-url> modern-blog-admin
+   cd modern-blog-admin
    pnpm install
    ```
 
-2. **Configure environment variables** by creating an `.env.local` file in the project root:
-
+2. **Create your environment file**
    ```bash
-   NEXTAUTH_URL=http://localhost:3000
-   NEXTAUTH_SECRET=your-generated-secret
-   SITE_BASE_URL=http://localhost:3000
-   BLOG_DB_HOST=127.0.0.1
-   BLOG_DB_PORT=3306
-   BLOG_DB_USER=root
-   BLOG_DB_PASSWORD=your-db-password
-   BLOG_DB_NAME=modern_blog
-   BLOG_DB_SSL=false
-   DB_CONNECTION_LIMIT=10 # optional
-   BCRYPT_SALT_ROUNDS=12  # optional override (defaults to 12)
+   cp .env.local.example .env.local
    ```
+   Update the values to match your local MySQL instance. `SITE_BASE_URL`, `NEXTAUTH_URL`, and database credentials are required even in development.
 
-   - `NEXTAUTH_SECRET` can be generated with `openssl rand -base64 32`.
-   - `NEXTAUTH_URL` should match the URL where the application is hosted.
-   - `SITE_BASE_URL` must include the protocol (`http://` or `https://`) and is used for canonical URLs, the sitemap, and the RSS feed.
-   - `BLOG_DB_*` variables must point to a MySQL instance that contains the `users` table used by the admin interface.
+3. **Start MySQL and apply the schema**
+   - **Existing MySQL**: ensure the database named in `BLOG_DB_NAME` exists.
+   - **Docker (recommended for local development)**:
+     ```bash
+     docker compose up db -d
+     ```
+   - Import the reference schema:
+     ```bash
+     mysql -h 127.0.0.1 -u <user> -p<password> <database> < docs/blog_schema.sql
+     ```
 
-3. **Seed an administrator account**
-
-   The project includes a convenience script that upserts an administrator using the configured database connection:
-
+4. **Seed an administrator account**
    ```bash
    pnpm seed:admin
    ```
+   By default this ensures an `admin / 123456` user exists with `role = 'admin'` and `status = 'active'`. Override the credentials by exporting `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL`.
 
-   The script reads the optional `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` environment variables (falling back to `admin`, `123456`, and no email) and ensures a record exists in the `users` table with `role = 'admin'` and `status = 'active'`.
-
-   Ensure your database exposes a compatible `users` table. A minimal schema looks like:
-
-   ```sql
-   CREATE TABLE IF NOT EXISTS users (
-     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-     username VARCHAR(255) NOT NULL UNIQUE,
-     email VARCHAR(255) NOT NULL UNIQUE,
-     password_hash VARCHAR(255) NOT NULL,
-     role VARCHAR(50) NOT NULL,
-     status VARCHAR(50) NOT NULL,
-     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-   );
-   ```
-
-4. **Run in development**
-
+5. **Run the development server**
    ```bash
    pnpm dev
    ```
+   Visit [http://localhost:3000/admin/login](http://localhost:3000/admin/login) and sign in with the seeded credentials.
 
-   Visit [http://localhost:3000/admin/login](http://localhost:3000/admin/login) to sign in with the seeded credentials.
+6. **(Optional) Run maintenance scripts**
+   - `pnpm migrate:slugs` converts legacy slugs to Pinyin-friendly variants, ensuring uniqueness across posts.
+
+## Environment configuration
+
+All configuration keys live in `.env.local.example`. Copy it to `.env.local` for development and to `.env.production` (or `.env`) for production builds.
+
+| Variable | Required | Default/example | Purpose |
+| --- | --- | --- | --- |
+| `NEXTAUTH_SECRET` | ✅ | Generated via `openssl rand -base64 32` | Secret used by NextAuth to sign/encrypt session tokens. |
+| `NEXTAUTH_URL` | ✅ | `http://localhost:3000` | Public URL of the admin app. Should match the domain served by Nginx/Ingress. |
+| `SITE_BASE_URL` | ✅ | `http://localhost:3000` | Canonical origin for sitemap, RSS feed, and metadata. Must include protocol. |
+| `BLOG_DB_HOST` | ✅ | `127.0.0.1` | MySQL host or service name (`db` when using Docker Compose). |
+| `BLOG_DB_PORT` | ✅ | `3306` | MySQL port. |
+| `BLOG_DB_USER` | ✅ | `root` | Database user with read/write privileges. |
+| `BLOG_DB_PASSWORD` | ✅ | `your-db-password` | Password for `BLOG_DB_USER`. |
+| `BLOG_DB_NAME` | ✅ | `modern_blog` | Database/schema name containing blog tables. |
+| `BLOG_DB_SSL` | ➖ | `false` | Set to `true` or a DSN string for SSL-enabled connections. |
+| `DB_CONNECTION_LIMIT` | ➖ | `10` | Max pooled MySQL connections. |
+| `BCRYPT_SALT_ROUNDS` | ➖ | `12` | Cost factor for bcrypt password hashing. |
+| `ADMIN_USERNAME` | ➖ | `admin` | Override username when running `pnpm seed:admin`. |
+| `ADMIN_PASSWORD` | ➖ | `123456` | Override password when running `pnpm seed:admin`. |
+| `ADMIN_EMAIL` | ➖ | _(empty)_ | Optional email used by the seed script. |
+| `NEXT_PUBLIC_SITE_NAME` | ➖ | `Modern Blog` | Overrides the site name used in metadata and feeds. |
+| `NEXT_PUBLIC_SITE_DESCRIPTION` | ➖ | `Insights and stories from Modern Blog.` | Overrides the site description used in metadata and feeds. |
+| `MYSQL_ROOT_PASSWORD` | ➖ | `root` | Convenience value consumed by `docker-compose.yml` when provisioning the bundled MySQL service. |
+
+For production deploys, place these variables in an `.env.production` file and reference it from Docker Compose or your hosting provider’s secret manager.
+
+## Database schema and migrations
+
+The repository includes a reference schema at [`docs/blog_schema.sql`](docs/blog_schema.sql). Import it into the database named in `BLOG_DB_NAME` before running the app:
+
+```bash
+mysql -h <host> -u <user> -p<password> <database> < docs/blog_schema.sql
+```
+
+Key tables:
+
+- `users` – stores credentials, role, and status for administrators.
+- `posts` – article content, summary, HTML/Markdown payloads, status, and author relationships.
+- `tags` and `post_tags` – tag catalogue and the many-to-many join table.
+- `media` – optional metadata when persisting uploads locally.
+
+Maintenance tooling lives in `scripts/`:
+
+- `pnpm seed:admin` upserts an admin user according to the environment configuration.
+- `pnpm migrate:slugs` normalises existing post slugs to Pinyin-based, unique identifiers (safe to rerun).
+
+Back up your production database before applying schema changes or running maintenance scripts.
+
+## Feature checklist
+
+- [x] Credentials-based authentication via NextAuth.js with bcrypt hashing and session JWTs.
+- [x] Rich text editor powered by Tiptap with live preview, Markdown shortcuts, KaTeX/LaTeX rendering, and Shiki syntax highlighting.
+- [x] Post management (create, edit, publish, archive, delete) with automatic slug generation and status filters.
+- [x] Tag management with uniqueness safeguards, Pinyin slug migration, and post/tag association counts.
+- [x] Image uploads (JPEG, PNG, WebP, GIF, SVG) with 5&nbsp;MB size limits, SVG sanitisation, metadata extraction, and persistent storage under `public/uploads`.
+- [x] RESTful admin APIs for posts, tags, media uploads, and database health checks guarded by authenticated sessions.
+- [x] Search endpoints for published posts with tag hydration and pagination-friendly responses.
+- [x] SEO outputs including dynamic metadata, Open Graph/Twitter cards, sitemap.xml, robots.txt, and RSS feeds.
+- [x] Dashboard statistics summarising post status counts, active users, tags, and recent content.
+- [x] Production-ready Dockerfile, docker-compose stack (with health checks and volumes), and Nginx reverse proxy tuned for Next.js assets.
+
+## Development workflow
+
+### Project structure
+
+```
+app/                    # Next.js routes, layouts, metadata, and API handlers
+app/api/**/*            # Session-protected REST endpoints for admin operations
+components/             # Shared UI primitives and admin widgets
+lib/                    # Database utilities, authentication, markdown rendering, search helpers
+scripts/                # Maintenance scripts (seed admin, migrate slugs)
+public/uploads/         # Persistent media uploads (bind-mounted in Docker)
+deploy/                 # Ops assets: nginx.conf and modern-blog-admin.service
+tests/unit/             # Vitest unit suites (environment validation, auth helpers)
+tests/integration/      # Database & API smoke tests
+```
+
+### Conventions
+
+- Use TypeScript for all new code. Prefer explicit return types for exported functions.
+- Keep data access centralised in `lib/` modules (e.g., `lib/admin/posts.ts`, `lib/tags.ts`). Avoid raw SQL in components.
+- Follow Tailwind utility ordering conventions already present in the project. Reuse components from `components/ui` where possible.
+- Protect new admin endpoints with `auth()` checks and return structured JSON error payloads.
+- Store user-uploaded assets via `LocalMediaStorage` to maintain consistent directory layout.
+
+### Adding new features
+
+1. Extend the database schema (via a migration or manual SQL) and document the change in `docs/`.
+2. Add or update repository scripts if data backfills are required.
+3. Implement server logic in `lib/` or `app/api/` before wiring UI components.
+4. Cover new behaviour with Vitest unit tests and, when appropriate, integration tests under `tests/integration`.
+5. Update this README (and `.env.local.example`) when new configuration is required.
+6. Run the commands in [Testing & quality checks](#testing--quality-checks) before opening a pull request.
 
 ## Testing & quality checks
 
-Run the project quality checks with pnpm:
-
 ```bash
-pnpm lint   # ESLint (Next.js configuration)
-pnpm check  # TypeScript type checking
-pnpm test   # Vitest unit and integration tests
+pnpm lint   # ESLint with Next.js configuration
+pnpm check  # TypeScript type checking (tsc --noEmit)
+pnpm test   # Vitest unit & integration suites
 ```
 
-Unit tests live under `tests/unit` and cover environment validation and password hashing helpers. Integration smoke tests for the database health endpoint can be found in `tests/integration`.
+Continuous integration runs these commands automatically via the GitHub Actions workflow in `.github/workflows/ci.yml`.
 
-## Media uploads
+## Deployment
 
-- The admin editor uploads images via `POST /api/media/upload`, which requires an authenticated admin session.
-- Supported MIME types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`, and `image/svg+xml`. Requests with other types return `415`.
-- SVG uploads are rejected if they contain scripts, inline event handlers, or embedded HTML via `<foreignObject>`.
-- Files larger than 5&nbsp;MB are rejected with HTTP `413`.
-- Filenames are sanitised and stored as unique objects under `public/uploads/<year>/<month>/` so assets remain organised by upload date.
-- The API response includes the public URL along with width, height, MIME type, and file size metadata for editor integrations.
-- When running with Docker Compose, uploads persist thanks to the `./public/uploads:/app/public/uploads` volume declared in `docker-compose.yml`.
+All deployment assets live at the repository root or under `deploy/`. The stack is designed to run the Next.js server behind Nginx with persistent uploads and a managed or co-located MySQL database.
 
-## Continuous integration
+### Build a production image
 
-A GitHub Actions workflow is defined at `.github/workflows/ci.yml`. It installs dependencies with pnpm and runs `pnpm lint`, `pnpm check`, and `pnpm test` on pushes and pull requests targeting the `main` branch.
+The provided multi-stage [`Dockerfile`](Dockerfile) builds and prunes dependencies before producing a lean Node.js 20 Alpine image. To build locally:
 
-## Authentication flow
+```bash
+docker build -t modern-blog-admin:latest .
+```
 
-- The `/admin/login` page uses a secure server action to authenticate credentials with NextAuth's Credentials provider.
-- Passwords are verified with bcrypt against the stored hash in the MySQL database.
-- Successful login establishes a secure session via NextAuth. Unauthenticated requests to `/admin` routes are redirected to the login page by middleware.
-- Invalid credentials return a clear inline error message without redirecting away from the form.
+The image exposes port `3000`, declares a writable volume at `/app/public/uploads`, and defines a health check against `/api/health/db`.
 
-## Project structure
+### Deploy with Docker Compose
 
-- `auth.ts` – central NextAuth configuration and exports for handlers, session, and server actions.
-- `app/admin` – protected admin routes and layout shell.
-- `app/api/auth/[...nextauth]` – NextAuth route handler for the App Router.
-- `lib` – shared utilities for database access and authentication helpers.
-- `components/ui` – shadcn-inspired UI primitives used by the login form and admin pages.
+[`docker-compose.yml`](docker-compose.yml) provisions two services: `app` (the Next.js server) and `db` (MySQL 8). It mounts `./public/uploads` into the container to keep media between deploys and injects environment variables from `.env.production`.
 
-## Deployment notes
-
-Session cookies are managed automatically by NextAuth and scoped to HTTPS in production. The sample Nginx configuration included in this repository listens on port 80 so you can verify the deployment over HTTP first, but you should still plan to terminate TLS (for example, with Nginx on Alibaba Cloud or a cloud load balancer) before exposing the admin interface publicly.
-
-## Required environment variables
-
-| Name | Required | Description |
-| --- | --- | --- |
-| `NEXTAUTH_SECRET` | ✅ | Secret used by NextAuth to sign and encrypt session tokens. Generate with `openssl rand -base64 32`. |
-| `NEXTAUTH_URL` | ✅ | Public URL of the admin interface (e.g. `https://admin.example.com`). |
-| `SITE_BASE_URL` | ✅ | Base URL used for canonical links, the sitemap, and RSS feed (include protocol, e.g. `http://blog.example.com`). |
-| `BLOG_DB_HOST` | ✅ | Hostname or IP of the MySQL instance. |
-| `BLOG_DB_PORT` | ✅ | MySQL port (default `3306`). |
-| `BLOG_DB_USER` | ✅ | Database user with read/write access to the admin schema. |
-| `BLOG_DB_PASSWORD` | ✅ | Password for `BLOG_DB_USER`. |
-| `BLOG_DB_NAME` | ✅ | Database/schema name that contains the `users` table. |
-| `BLOG_DB_SSL` | ➖ | Optional flag or DSN string for SSL-enabled database connections (`true`, `false`, or a custom DSN). |
-| `DB_CONNECTION_LIMIT` | ➖ | Max connections for the MySQL pool (defaults to `10`). |
-| `BCRYPT_SALT_ROUNDS` | ➖ | Override bcrypt salt rounds for password hashing (defaults to `12`). |
-
-## Alibaba Cloud deployment guide
-
-### Prerequisites
-
-- **Compute**: Elastic Compute Service (ECS) or Container Service (ACK/ECI) instance running a recent 64-bit Linux distribution.
-- **Node.js**: Install Node.js 20 LTS (`nvm install 20` or via Alibaba Cloud image). Run `corepack enable` so pnpm is available, or install pnpm globally (`npm install -g pnpm`).
-- **Database**: Provision an ApsaraDB RDS for MySQL instance (or self-managed MySQL). Allow inbound connections from the application subnet only.
-- **Object storage / disk**: Attach an OSS bucket or a mounted disk for persistent uploads (the app writes to `public/uploads`).
-
-### Firewall and networking
-
-1. In the Alibaba Cloud security group for your ECS instance, allow inbound TCP traffic on port **80** for web traffic (add **443** when you enable HTTPS) and restrict port **3000** to internal traffic only (if the reverse proxy terminates TLS).
-2. Allow outbound connections on port **3306** (or your MySQL port) so the app can reach the RDS instance.
-3. If using Docker Compose, ensure the bridge network does not conflict with existing VPC CIDR ranges.
-
-### Container deployment (recommended)
-
-1. Create a `.env.production` file in the project root with the variables from the table above. For example:
+1. Create `.env.production` with production secrets and database credentials:
    ```bash
    cat <<'EOF' > .env.production
-   NEXTAUTH_SECRET="$(openssl rand -base64 32)"
+   NEXTAUTH_SECRET=$(openssl rand -base64 32)
    NEXTAUTH_URL=https://admin.example.com
-   SITE_BASE_URL=http://your-domain-or-ip
-   BLOG_DB_HOST=db.internal
+   SITE_BASE_URL=https://blog.example.com
+   BLOG_DB_HOST=db
    BLOG_DB_PORT=3306
    BLOG_DB_USER=modern_blog
-   BLOG_DB_PASSWORD=secure-password
+   BLOG_DB_PASSWORD=super-secret-password
    BLOG_DB_NAME=modern_blog
    BLOG_DB_SSL=false
    EOF
    ```
-
-2. Build and tag the image locally or in a CI pipeline:
-   ```bash
-   docker build -t modern-blog-admin:latest .
-   ```
-
-3. Test the image on the ECS host (or your workstation) before wiring up Nginx:
-   ```bash
-   docker run --rm -it \
-     --env-file .env.production \
-     -p 3000:3000 \
-     -v "$(pwd)/public/uploads:/app/public/uploads" \
-     modern-blog-admin:latest
-   ```
-   Visit [http://localhost:3000/admin/login](http://localhost:3000/admin/login) to confirm the application is healthy, then press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop the container.
-
-4. Deploy with Docker Compose in detached mode (adjust `docker-compose.yml` if you need to change image tags, port bindings, or database hostnames):
+2. Launch the stack:
    ```bash
    docker compose --env-file .env.production up -d --build
    ```
-   The compose file mounts `./public/uploads` so uploads persist across releases, and the `env_file` directive injects `SITE_BASE_URL` and database credentials without hard-coding them. The application will be available on port `3000` inside the container—use the Nginx configuration below to expose it on port 80 (add a TLS-enabled server block when you are ready for HTTPS).
+3. Verify the container logs and wait for the health check to pass (`docker compose ps`). The application listens on container port `3000`; place Nginx or a load balancer in front for public traffic.
+
+> **Tip:** If you rely on a managed MySQL service (e.g., RDS), remove or disable the bundled `db` service and point `BLOG_DB_HOST`/`BLOG_DB_PORT` at the managed instance.
 
 ### Nginx reverse proxy
 
-1. Copy `deploy/nginx.conf` to `/etc/nginx/conf.d/modern-blog-admin.conf` on your ECS instance (or symlink it if you keep the repository checked out on the server). The upstream targets `127.0.0.1:3000`; adjust it if the container runs on another host or network.
-2. Ensure the `/uploads/` alias matches the host path that Docker mounts (`/var/www/modern-blog-admin/public/uploads/` in the sample). Update the path if you store uploads elsewhere and grant Nginx read access.
-3. Set `server_name` and the `SITE_BASE_URL` environment variable to the domain you intend to serve (include the `http://` prefix while running over HTTP).
-4. Validate and reload Nginx:
+Use [`deploy/nginx.conf`](deploy/nginx.conf) to terminate HTTP traffic and serve static assets efficiently.
+
+1. Copy the file to your server (e.g., `/etc/nginx/conf.d/modern-blog-admin.conf`).
+2. Update `server_name` and the `/uploads/` alias to match your domain and the host path where uploads are stored (default: `/var/www/modern-blog-admin/public/uploads/`).
+3. Ensure the upstream (`127.0.0.1:3000`) resolves to the running container or service.
+4. Reload Nginx:
    ```bash
    sudo nginx -t
    sudo systemctl reload nginx
    ```
-   The configuration listens on port 80, forwards `X-Forwarded-*` headers, enables gzip compression, caches Next.js `_next` assets, and raises `client_max_body_size` for uploads. When you are ready to enable HTTPS, add a TLS-enabled server block or terminate TLS in an upstream load balancer.
 
-### Persisting media uploads
+The configuration caches `_next/static` assets aggressively, forwards standard `X-Forwarded-*` headers, and increases `client_max_body_size` to 25&nbsp;MB to accommodate image uploads. Add a TLS-enabled server block (or use a cloud load balancer) before exposing the admin interface over the public internet.
 
-- The application writes uploaded assets to `public/uploads`. When running in Docker, keep the existing bind mount (`./public/uploads:/app/public/uploads`) so files are stored on the ECS disk or a mounted NAS/OSS path.
-- For bare-metal deployments, point `public/uploads` to a persistent disk or mount (e.g. `/var/www/modern-blog-admin/public/uploads`). Ensure the service user has write permissions.
+### Alibaba Cloud HTTP quick start
 
-### Non-container deployment with systemd
+For deployments on Alibaba Cloud ECS or ACK:
 
-1. Install dependencies on the ECS instance:
+1. **Provision infrastructure**
+   - ECS instance (or ACK node) running a recent 64-bit Linux distribution.
+   - MySQL (ApsaraDB RDS or self-managed) reachable from the application subnet only.
+   - Persistent storage for uploads (ECS disk, NAS, or OSS mount).
+
+2. **Harden networking**
+   - Allow inbound TCP traffic on port **80** (and **443** when HTTPS is enabled) in your security group.
+   - Restrict port **3000** to the VPC/private subnets—only Nginx or your load balancer should reach it.
+   - Permit outbound traffic on your MySQL port (default 3306) so the app can reach RDS.
+
+3. **Install runtime dependencies**
+   ```bash
+   sudo apt-get update && sudo apt-get install -y curl git
+   nvm install 20
+   corepack enable
+   corepack prepare pnpm@9.12.2 --activate
+   ```
+
+4. **Deploy with Docker (recommended)**
+   - Clone this repository onto the ECS instance.
+   - Create `.env.production` with the variables listed above.
+   - Run `docker compose --env-file .env.production up -d --build`.
+   - Bind-mount `/var/www/modern-blog-admin/public/uploads` (or a mounted OSS/NAS path) to persist media.
+
+5. **Attach Nginx**
+   - Copy `deploy/nginx.conf`, update `server_name`, and point the `/uploads/` alias to your mounted path.
+   - Reload Nginx and validate access over HTTP before enabling HTTPS with an Alibaba Cloud SSL certificate or a managed load balancer.
+
+6. **Verify connectivity**
+   - Test database access from the ECS host: `mysql -h <host> -u <user> -p`.
+   - Hit `http://your-domain/api/health/db` to confirm the application can reach MySQL.
+
+### Optional systemd service
+
+For bare-metal or VM deployments without Docker:
+
+1. Install production dependencies:
    ```bash
    pnpm install --frozen-lockfile
    pnpm build
    ```
-2. Copy `deploy/modern-blog-admin.service` to `/etc/systemd/system/modern-blog-admin.service` and adjust `WorkingDirectory`, `User`, and `Group` as needed.
-3. Create `/etc/modern-blog-admin/env` containing the environment variables listed above (one `KEY=value` per line).
-4. Allow the service user to write to `public/uploads`:
-   ```bash
-   sudo chown -R www-data:www-data /var/www/modern-blog-admin/public/uploads
-   ```
-5. Enable and start the service:
+2. Copy [`deploy/modern-blog-admin.service`](deploy/modern-blog-admin.service) into `/etc/systemd/system/` and adjust `WorkingDirectory`, `User`, and `Group` as needed.
+3. Create `/etc/modern-blog-admin/env` containing the environment variables from [Environment configuration](#environment-configuration).
+4. Ensure the service user can write to `public/uploads` (e.g., `sudo chown -R www-data:www-data /var/www/modern-blog-admin/public/uploads`).
+5. Start and enable the service:
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now modern-blog-admin
    ```
 
-Regardless of deployment method, verify database connectivity from the ECS instance (`mysql -h <host> -u <user> -p`) and confirm that the initial admin user has been seeded before exposing the interface to the internet.
+## Troubleshooting
+
+- **"Invalid environment variables" on startup** – Ensure every `BLOG_DB_*`, `NEXTAUTH_*`, and `SITE_BASE_URL` value is set. The Zod validator in `lib/env.ts` terminates early when required keys are missing.
+- **`/api/health/db` returns 503** – MySQL is unreachable. Confirm the database is running, credentials are correct, and network security groups/firewalls allow traffic.
+- **Seed script errors (`ER_NO_SUCH_TABLE`)** – Import `docs/blog_schema.sql` before running `pnpm seed:admin` or any migration scripts.
+- **Uploads fail with 413/415 responses** – Check `client_max_body_size` in Nginx, ensure files are within the 5&nbsp;MB limit, and verify the image MIME type is one of the allowed formats.
+- **Uploaded media missing after restart** – Make sure `public/uploads` is mounted to persistent storage (`./public/uploads:/app/public/uploads` in Docker) and writable by the runtime user.
+- **Docker health check keeps failing** – The container polls `/api/health/db`; wait for MySQL to finish initialising or adjust environment credentials.
+- **`Error: JWT Secret not configured` from NextAuth** – Regenerate and set `NEXTAUTH_SECRET` in both local and production environments.
+- **`pnpm: command not found`** – Enable Corepack (`corepack enable`) or install pnpm globally (`npm install -g pnpm`).
+
+With these resources in place, new contributors can spin up a fully functional environment, understand the project architecture, and deploy Modern Blog Admin with confidence.
