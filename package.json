@@ -55,6 +55,7 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.0",
     "sanitize-html": "^2.13.0",
+    "sharp": "^0.33.5",
     "shiki": "^3.14.0",
     "tailwind-merge": "^2.2.1",
     "unified": "^11.0.4",

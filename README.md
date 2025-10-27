@@ -75,6 +75,16 @@ pnpm test   # Vitest unit and integration tests
 
 Unit tests live under `tests/unit` and cover environment validation and password hashing helpers. Integration smoke tests for the database health endpoint can be found in `tests/integration`.
 
+## Media uploads
+
+- The admin editor uploads images via `POST /api/media/upload`, which requires an authenticated admin session.
+- Supported MIME types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`, and `image/svg+xml`. Requests with other types return `415`.
+- SVG uploads are rejected if they contain scripts, inline event handlers, or embedded HTML via `<foreignObject>`.
+- Files larger than 5&nbsp;MB are rejected with HTTP `413`.
+- Filenames are sanitised and stored as unique objects under `public/uploads/<year>/<month>/` so assets remain organised by upload date.
+- The API response includes the public URL along with width, height, MIME type, and file size metadata for editor integrations.
+- When running with Docker Compose, uploads persist thanks to the `./public/uploads:/app/public/uploads` volume declared in `docker-compose.yml`.
+
 ## Continuous integration
 
 A GitHub Actions workflow is defined at `.github/workflows/ci.yml`. It installs dependencies with pnpm and runs `pnpm lint`, `pnpm check`, and `pnpm test` on pushes and pull requests targeting the `main` branch.

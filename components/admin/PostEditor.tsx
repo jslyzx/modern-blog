@@ -162,12 +162,22 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
           return;
         }
 
-        if (!payload?.url) {
+        if (typeof payload?.url !== "string") {
           setError("上传失败：响应缺少 URL。");
           return;
         }
 
-        editor?.chain().focus().setImage({ src: payload.url, alt: file.name }).run();
+        const imageAttributes: Record<string, unknown> = {
+          src: payload.url,
+          alt: file.name,
+        };
+
+        if (typeof payload.width === "number" && typeof payload.height === "number") {
+          imageAttributes.width = payload.width;
+          imageAttributes.height = payload.height;
+        }
+
+        editor?.chain().focus().setImage(imageAttributes).run();
       } catch (uploadError) {
         console.error("Failed to upload image", uploadError);
         setError("上传失败，请重试。");
@@ -191,6 +201,53 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
     },
     [uploadImage],
   );
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (!event.clipboardData || uploading) {
+        return;
+      }
+
+      const imageFiles: File[] = [];
+
+      for (const item of Array.from(event.clipboardData.items)) {
+        if (item.kind !== "file") {
+          continue;
+        }
+
+        const file = item.getAsFile();
+
+        if (file && allowedTypes.has(file.type)) {
+          imageFiles.push(file);
+        }
+      }
+
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const uploadSequentially = async () => {
+        for (const imageFile of imageFiles) {
+          await uploadImage(imageFile);
+        }
+      };
+
+      void uploadSequentially();
+    };
+
+    const editorElement = editor.view.dom;
+    editorElement.addEventListener("paste", handlePaste);
+
+    return () => {
+      editorElement.removeEventListener("paste", handlePaste);
+    };
+  }, [editor, uploadImage, uploading]);
 
   const triggerFileBrowser = useCallback(() => {
     fileInputRef.current?.click();

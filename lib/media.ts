@@ -1,6 +1,8 @@
 import { promises as fs } from "node:fs/promises";
 import path from "node:path";
 
+import { nanoid } from "nanoid";
+
 import { IMAGE_MIME_EXTENSION_MAP } from "./media-config";
 
 export interface MediaUpload {
@@ -13,7 +15,7 @@ export interface MediaUpload {
 export interface MediaUploadResult {
   url: string;
   filename: string;
-  size: number;
+  sizeBytes: number;
   mimeType: string;
   storagePath: string;
 }
@@ -46,17 +48,20 @@ const URL_PREFIX = "/uploads";
 const MIME_EXTENSION_MAP = IMAGE_MIME_EXTENSION_MAP;
 
 const sanitizeFilename = (filename: string) => {
-  const normalized = filename
+  const withoutPath = path.basename(filename);
+  const normalized = withoutPath
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9._-]/g, "");
+    .replace(/[^a-z0-9._-]/g, "")
+    .replace(/\.+/g, ".");
+  const cleaned = normalized.replace(/^\.+/, "");
 
-  return normalized || "file";
+  return cleaned || "file";
 };
 
-const ensureUploadsDirectory = async () => {
-  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+const ensureUploadsDirectory = async (directory: string) => {
+  await fs.mkdir(directory, { recursive: true });
 };
 
 const moveFile = async (source: string, destination: string) => {
@@ -76,29 +81,42 @@ const moveFile = async (source: string, destination: string) => {
   }
 };
 
+const buildTargetPath = async (filenameBase: string, extension: string) => {
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const directory = path.join(UPLOADS_DIR, year, month);
+  await ensureUploadsDirectory(directory);
+
+  const uniqueSuffix = nanoid(12);
+  const base = filenameBase || "file";
+  const finalName = extension ? `${base}-${uniqueSuffix}${extension}` : `${base}-${uniqueSuffix}`;
+
+  return {
+    storagePath: path.join(directory, finalName),
+    url: `${URL_PREFIX}/${year}/${month}/${finalName}`,
+    filename: finalName,
+  };
+};
+
 export class LocalMediaStorage implements MediaStorageProvider {
   async save(file: MediaUpload): Promise<MediaUploadResult> {
-    await ensureUploadsDirectory();
-
     const originalName = file.originalFilename ?? "upload";
-    const sanitized = sanitizeFilename(path.basename(originalName));
+    const sanitized = sanitizeFilename(originalName);
     const extensionFromName = path.extname(sanitized);
     const normalizedBase = extensionFromName ? sanitized.slice(0, -extensionFromName.length) : sanitized;
-    const safeBase = normalizedBase || "file";
+    const baseCandidate = normalizedBase || "file";
+    const safeBase = baseCandidate.length > 64 ? baseCandidate.slice(0, 64) : baseCandidate;
     const guessedExtension = file.mimetype ? MIME_EXTENSION_MAP[file.mimetype] : undefined;
     const extension = extensionFromName || guessedExtension || "";
-    const timestamp = Date.now();
-    const finalFilename = extension ? `${timestamp}-${safeBase}${extension}` : `${timestamp}-${safeBase}`;
 
-    const storagePath = path.join(UPLOADS_DIR, finalFilename);
+    const { storagePath, url, filename } = await buildTargetPath(safeBase, extension);
     await moveFile(file.filepath, storagePath);
-
-    const url = `${URL_PREFIX}/${finalFilename}`;
 
     return {
       url,
-      filename: finalFilename,
-      size: file.size,
+      filename,
+      sizeBytes: file.size,
       mimeType: file.mimetype ?? "application/octet-stream",
       storagePath,
     };
