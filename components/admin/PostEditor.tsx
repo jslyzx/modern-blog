@@ -51,12 +51,12 @@ const toolbarButtonClasses = (active?: boolean) =>
   );
 
 interface PostEditorProps {
-  contentHtml: string;
+  content: string;
   editorKey?: string;
   onChange: (content: string) => void;
 }
 
-export function PostEditor({ contentHtml, editorKey, onChange }: PostEditorProps) {
+export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [showFormulaDialog, setShowFormulaDialog] = useState(false);
@@ -64,7 +64,7 @@ export function PostEditor({ contentHtml, editorKey, onChange }: PostEditorProps
   const [formulaType, setFormulaType] = useState<"inline" | "block">("block");
 
   const resolvedEditorKey = editorKey ?? "post-editor";
-  const normalizedContent = contentHtml || "";
+  const normalizedContent = content || "";
   const lastSyncedContentRef = useRef<string>(normalizedContent);
 
   const editor = useEditor(

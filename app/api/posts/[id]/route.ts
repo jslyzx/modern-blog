@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import {
   deletePostById,
   ensureUniquePostSlug,
+  getPostById,
   isPostStatus,
   type PostStatus,
   updatePost,
@@ -34,6 +35,33 @@ const parseId = (value: string | string[] | undefined): number | null => {
 };
 
 const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+
+export async function GET(_request: Request, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return unauthorized();
+  }
+
+  const postId = parseId(context.params.id);
+
+  if (!postId) {
+    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+  }
+
+  try {
+    const post = await getPostById(postId);
+
+    if (!post) {
+      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+    }
+
+    return NextResponse.json({ post });
+  } catch (error) {
+    console.error("Failed to fetch post", { postId, error });
+    return NextResponse.json({ error: "获取文章失败" }, { status: 500 });
+  }
+}
 
 export async function DELETE(_request: Request, context: RouteContext) {
   const session = await auth();
