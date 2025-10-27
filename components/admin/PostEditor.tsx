@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { EditorContent, useEditor } from "@tiptap/react";
 import History from "@tiptap/extension-history";
@@ -65,35 +65,40 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
 
   const resolvedEditorKey = editorKey ?? "post-editor";
   const normalizedContent = content || "";
+  const extensions = useMemo(
+    () => [
+      StarterKit.configure({
+        history: false,
+        heading: {
+          levels: [1, 2, 3],
+        },
+      }),
+      History.configure({
+        depth: 100,
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-primary underline",
+        },
+      }),
+      Image.configure({
+        HTMLAttributes: {
+          class: "my-4 rounded-md max-w-full",
+        },
+      }),
+      Placeholder.configure({
+        placeholder: "开始撰写文章内容...",
+      }),
+    ],
+    [],
+  );
   const lastSyncedContentRef = useRef<string>(normalizedContent);
 
   const editor = useEditor(
     {
       immediatelyRender: false,
-      extensions: [
-        StarterKit.configure({
-          heading: {
-            levels: [1, 2, 3],
-          },
-        }),
-        History.configure({
-          depth: 100,
-        }),
-        Link.configure({
-          openOnClick: false,
-          HTMLAttributes: {
-            class: "text-primary underline",
-          },
-        }),
-        Image.configure({
-          HTMLAttributes: {
-            class: "my-4 rounded-md max-w-full",
-          },
-        }),
-        Placeholder.configure({
-          placeholder: "开始撰写文章内容...",
-        }),
-      ],
+      extensions,
       content: normalizedContent,
       onUpdate({ editor }) {
         const nextHtml = editor.getHTML();
