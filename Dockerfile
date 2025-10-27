@@ -28,7 +28,7 @@ ARG PNPM_VERSION=9.12.2
 ENV NODE_ENV=production
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate \
-    && apk add --no-cache libc6-compat
+    && apk add --no-cache libc6-compat curl
 COPY --from=production-deps /pnpm /pnpm
 COPY --from=production-deps /app/package.json ./package.json
 COPY --from=production-deps /app/node_modules ./node_modules
@@ -37,5 +37,8 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/next.config.ts ./next.config.ts
+RUN mkdir -p /app/public/uploads
+VOLUME ["/app/public/uploads"]
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f http://127.0.0.1:3000/api/health/db || exit 1
 CMD ["pnpm", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]
