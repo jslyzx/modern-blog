@@ -89,7 +89,23 @@ export const buildSiteUrl = (path: string): string => {
   return `${base}${normalizedPath}`;
 };
 
-export const buildPostUrl = (slug: string): string => buildSiteUrl(slug);
+export const buildPostPath = (slug: string): string => {
+  const normalizedSlug = slug.trim();
+
+  if (!normalizedSlug) {
+    return "/";
+  }
+
+  const withoutLeadingSlash = normalizedSlug.replace(/^\/+/, "");
+
+  if (!withoutLeadingSlash) {
+    return "/";
+  }
+
+  return ensureLeadingSlash(withoutLeadingSlash);
+};
+
+export const buildPostUrl = (slug: string): string => buildSiteUrl(buildPostPath(slug));
 
 export const getMetadataBase = (): URL => new URL(getSiteOrigin());
 

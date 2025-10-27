@@ -6,6 +6,7 @@ import { cache } from "react";
 
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import {
+  buildPostPath,
   buildPostUrl,
   createAbsoluteUrl,
   ensureAbsoluteUrl,
@@ -25,8 +26,6 @@ type PostPageProps = {
     slug: string;
   };
 };
-
-const ensureLeadingSlash = (value: string): string => (value.startsWith("/") ? value : `/${value}`);
 
 const decodeSlugValue = (value: string): string | null => {
   try {
@@ -93,7 +92,7 @@ const loadPostOrRedirect = async (slug: string): Promise<PublishedPost> => {
   const { post, redirectSlug } = await resolvePost(slug);
 
   if (redirectSlug) {
-    const target = ensureLeadingSlash(redirectSlug);
+    const target = buildPostPath(redirectSlug);
     permanentRedirect(target);
   }
 
@@ -120,7 +119,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const description = summary || truncateWords(plainTextContent, 40) || fallbackDescription;
 
   const canonicalUrl =
-    ensureAbsoluteUrl(buildPostUrl(post.slug)) ?? createAbsoluteUrl(post.slug);
+    ensureAbsoluteUrl(buildPostUrl(post.slug)) ?? createAbsoluteUrl(buildPostPath(post.slug));
   const coverImage = ensureAbsoluteUrl(post.coverImageUrl) ?? getOgImageFallback();
 
   return {
@@ -173,7 +172,7 @@ export default async function PostPage({ params }: PostPageProps) {
   const post = await loadPostOrRedirect(params.slug);
 
   const canonicalHref = buildPostUrl(post.slug);
-  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? createAbsoluteUrl(post.slug);
+  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? createAbsoluteUrl(buildPostPath(post.slug));
   const coverImage = ensureAbsoluteUrl(post.coverImageUrl);
   const ogImage = coverImage ?? getOgImageFallback();
   const publishedLabel = formatDate(post.publishedAt);
