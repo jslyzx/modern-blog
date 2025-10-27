@@ -1,5 +1,5 @@
 import { getPublishedPosts } from "@/lib/posts";
-import { createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
+import { buildPostPath, createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
 
 const RSS_ITEM_LIMIT = 20;
 
@@ -38,7 +38,7 @@ export async function GET() {
 
   const items = posts
     .map((post) => {
-      const link = createAbsoluteUrl(`/${post.slug}`);
+      const link = createAbsoluteUrl(buildPostPath(post.slug));
       const summaryText = post.summary?.trim() ?? "";
       const summaryHtml = summaryText
         ? `<p>${escapeXml(summaryText)}</p>`

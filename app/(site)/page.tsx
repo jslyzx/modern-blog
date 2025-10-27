@@ -3,7 +3,7 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import { getPublishedPosts, type PublishedPostSummary } from "@/lib/posts";
-import { ensureAbsoluteUrl } from "@/lib/site";
+import { buildPostPath, ensureAbsoluteUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -65,7 +65,7 @@ function FeaturedPost({ post }: { post: PublishedPostSummary }) {
 
   return (
     <Link
-      href={`/${post.slug}`}
+      href={buildPostPath(post.slug)}
       className="group block overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:border-primary/40 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
     >
       {coverImage ? (
@@ -104,7 +104,7 @@ function PostCard({ post }: { post: PublishedPostSummary }) {
 
   return (
     <Link
-      href={`/${post.slug}`}
+      href={buildPostPath(post.slug)}
       className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:border-primary/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
     >
       {coverImage ? (
