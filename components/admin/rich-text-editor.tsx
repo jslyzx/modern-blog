@@ -1,19 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
-import { EditorContent, useEditor } from "@tiptap/react";
 import Image from "@tiptap/extension-image";
+import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
-import { Bold, Image as ImageIcon, Italic, List, ListOrdered, Redo2, Undo2 } from "lucide-react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import katex from "katex";
+import {
+  Bold,
+  Code,
+  FunctionSquare,
+  Heading2,
+  Heading3,
+  Heading4,
+  Image as ImageIcon,
+  Italic,
+  List,
+  ListOrdered,
+  Redo2,
+  Undo2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
 import { cn } from "@/lib/utils";
 
+import "katex/dist/katex.min.css";
+
+interface RichTextEditorProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
 const allowedTypes = new Set(allowedImageMimeTypes);
 const allowedTypeLabels = allowedImageMimeTypes.map((type) => type.replace("image/", "").replace("+xml", ""));
-const INITIAL_CONTENT = "<p>开始撰写文章...</p>";
 
 const humanFileSize = (bytes: number) => {
   if (bytes < 1024) {
@@ -33,17 +56,21 @@ const toolbarButtonClasses = (active?: boolean) =>
     active ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted",
   );
 
-export function RichTextEditor() {
-  const [previewHtml, setPreviewHtml] = useState(INITIAL_CONTENT);
+const headingLevels = [2, 3, 4] as const;
 
-  const editor = useEditor({
-    extensions: [
+export function RichTextEditor({ value, onChange, placeholder = "Write your post...", disabled = false }: RichTextEditorProps) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         history: {
           depth: 100,
         },
         heading: {
-          levels: [2, 3, 4],
+          levels: headingLevels,
         },
       }),
       Image.configure({
@@ -51,24 +78,37 @@ export function RichTextEditor() {
           class: "my-4 rounded-md",
         },
       }),
+      Placeholder.configure({
+        placeholder,
+      }),
     ],
-    content: INITIAL_CONTENT,
+    [placeholder],
+  );
+
+  const editor = useEditor({
+    extensions,
+    editable: !disabled,
+    content: value || "<p></p>",
     onUpdate({ editor }) {
-      setPreviewHtml(editor.getHTML());
+      onChange(editor.getHTML());
     },
   });
 
   useEffect(() => {
-    if (editor) {
-      setPreviewHtml(editor.getHTML());
+    if (!editor) {
+      return;
     }
-  }, [editor]);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+    const current = editor.getHTML();
 
-  const validateFile = (file: File) => {
+    if (value === current) {
+      return;
+    }
+
+    editor.commands.setContent(value || "<p></p>", false);
+  }, [editor, value]);
+
+  const validateFile = useCallback((file: File) => {
     if (!allowedTypes.has(file.type)) {
       return `不支持的文件类型，仅支持：${allowedTypeLabels.join(", ")}。`;
     }
@@ -78,7 +118,7 @@ export function RichTextEditor() {
     }
 
     return null;
-  };
+  }, []);
 
   const uploadImage = useCallback(
     async (file: File) => {
@@ -122,7 +162,7 @@ export function RichTextEditor() {
         setUploading(false);
       }
     },
-    [editor],
+    [editor, validateFile],
   );
 
   const onSelectImage = useCallback(
@@ -143,18 +183,41 @@ export function RichTextEditor() {
     fileInputRef.current?.click();
   }, []);
 
+  const insertFormula = useCallback(() => {
+    const formula = window.prompt("Enter a LaTeX formula", "E=mc^2");
+
+    if (!formula) {
+      return;
+    }
+
+    try {
+      const html = katex.renderToString(formula, {
+        throwOnError: false,
+        displayMode: true,
+      });
+
+      const wrapper = `<div class="katex-block my-4" data-formula="${encodeURIComponent(formula)}">${html}</div>`;
+      editor?.chain().focus().insertContent(wrapper).run();
+    } catch (renderError) {
+      console.error("Failed to render formula", renderError);
+      window.alert("Invalid formula. Please check your LaTeX syntax.");
+    }
+  }, [editor]);
+
   if (!editor) {
     return null;
   }
 
+  const isButtonDisabled = disabled || editor.isDestroyed;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b pb-3">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBold().run()}
-            disabled={!editor.can().chain().focus().toggleBold().run()}
+            disabled={isButtonDisabled || !editor.can().chain().focus().toggleBold().run()}
             className={toolbarButtonClasses(editor.isActive("bold"))}
           >
             <Bold className="h-4 w-4" />
@@ -162,7 +225,7 @@ export function RichTextEditor() {
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            disabled={!editor.can().chain().focus().toggleItalic().run()}
+            disabled={isButtonDisabled || !editor.can().chain().focus().toggleItalic().run()}
             className={toolbarButtonClasses(editor.isActive("italic"))}
           >
             <Italic className="h-4 w-4" />
@@ -170,6 +233,7 @@ export function RichTextEditor() {
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
+            disabled={isButtonDisabled}
             className={toolbarButtonClasses(editor.isActive("bulletList"))}
           >
             <List className="h-4 w-4" />
@@ -177,14 +241,44 @@ export function RichTextEditor() {
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            disabled={isButtonDisabled}
             className={toolbarButtonClasses(editor.isActive("orderedList"))}
           >
             <ListOrdered className="h-4 w-4" />
           </button>
           <button
             type="button"
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            disabled={isButtonDisabled}
+            className={toolbarButtonClasses(editor.isActive("codeBlock"))}
+          >
+            <Code className="h-4 w-4" />
+          </button>
+          {headingLevels.map((level) => (
+            <button
+              key={level}
+              type="button"
+              onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
+              disabled={isButtonDisabled}
+              className={toolbarButtonClasses(editor.isActive("heading", { level }))}
+            >
+              {level === 2 ? <Heading2 className="h-4 w-4" /> : null}
+              {level === 3 ? <Heading3 className="h-4 w-4" /> : null}
+              {level === 4 ? <Heading4 className="h-4 w-4" /> : null}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={insertFormula}
+            disabled={isButtonDisabled}
+            className={toolbarButtonClasses()}
+          >
+            <FunctionSquare className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => editor.chain().focus().undo().run()}
-            disabled={!editor.can().chain().focus().undo().run()}
+            disabled={isButtonDisabled || !editor.can().chain().focus().undo().run()}
             className={toolbarButtonClasses()}
           >
             <Undo2 className="h-4 w-4" />
@@ -192,7 +286,7 @@ export function RichTextEditor() {
           <button
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
-            disabled={!editor.can().chain().focus().redo().run()}
+            disabled={isButtonDisabled || !editor.can().chain().focus().redo().run()}
             className={toolbarButtonClasses()}
           >
             <Redo2 className="h-4 w-4" />
@@ -204,29 +298,21 @@ export function RichTextEditor() {
               accept={Array.from(allowedTypes).join(",")}
               onChange={onSelectImage}
               className="hidden"
-              disabled={uploading}
+              disabled={uploading || disabled}
             />
-            <Button type="button" variant="outline" onClick={triggerFileBrowser} disabled={uploading}>
+            <Button type="button" variant="outline" onClick={triggerFileBrowser} disabled={uploading || disabled}>
               <ImageIcon className="mr-2 h-4 w-4" />
               {uploading ? "上传中..." : "插入图片"}
             </Button>
           </div>
         </div>
         <div className="mt-4 rounded-md border">
-          <EditorContent editor={editor} className="editor-content px-3 py-4" />
+          <EditorContent editor={editor} className="editor-content min-h-[320px] px-3 py-4" />
         </div>
         {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
         <p className="mt-2 text-xs text-muted-foreground">
           支持的格式：{allowedTypeLabels.join(", ")} · 最大体积 {humanFileSize(MAX_FILE_SIZE_BYTES)}
         </p>
-      </div>
-
-      <div className="rounded-lg border bg-muted/30 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">预览</h2>
-        <div
-          className="preview-content mt-3 space-y-4 rounded-md border bg-background p-4"
-          dangerouslySetInnerHTML={{ __html: previewHtml }}
-        />
       </div>
     </div>
   );

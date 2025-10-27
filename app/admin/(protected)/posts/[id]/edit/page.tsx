@@ -1,50 +1,42 @@
-import { Suspense } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { PostForm, PostFormSkeleton } from "@/components/admin/PostForm";
-import { getAllTags, getPostById } from "@/lib/admin/posts";
+import { PostForm } from "@/components/admin/post-form";
+import { Button } from "@/components/ui/button";
+import { getPostById } from "@/lib/admin/posts";
+import { listTagOptions } from "@/lib/admin/tags";
 
-type EditPostPageProps = {
+interface EditPostPageProps {
   params: {
     id: string;
   };
-};
+}
 
 export default async function EditPostPage({ params }: EditPostPageProps) {
-  const postId = parseInt(params.id, 10);
+  const postId = Number(params.id);
 
-  if (!Number.isFinite(postId) || postId <= 0) {
+  if (!Number.isFinite(postId)) {
     notFound();
   }
 
-  const [post, availableTags] = await Promise.all([getPostById(postId), getAllTags()]);
+  const [post, tags] = await Promise.all([getPostById(postId), listTagOptions()]);
 
   if (!post) {
     notFound();
   }
 
-  const initialData = {
-    title: post.title,
-    slug: post.slug,
-    summary: post.summary,
-    contentHtml: post.contentHtml,
-    coverImageUrl: post.coverImageUrl,
-    status: post.status,
-    isFeatured: post.isFeatured,
-    allowComments: post.allowComments,
-    tagIds: post.tags.map((tag) => tag.id),
-  };
-
   return (
     <section className="space-y-6">
-      <header className="border-b pb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">编辑文章</h1>
-        <p className="text-muted-foreground">更新文章内容、元数据与相关设置。</p>
-      </header>
-
-      <Suspense fallback={<PostFormSkeleton />}>
-        <PostForm postId={post.id} initialData={initialData} initialTags={availableTags} />
-      </Suspense>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Edit post</h1>
+          <p className="text-sm text-muted-foreground">Update the content, metadata, and publishing status.</p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href="/admin/posts">Back to posts</Link>
+        </Button>
+      </div>
+      <PostForm mode="edit" post={post} tags={tags} />
     </section>
   );
 }

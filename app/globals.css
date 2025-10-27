@@ -46,148 +46,25 @@ input::placeholder {
   color: hsl(var(--muted-foreground));
 }
 
-.editor-content .ProseMirror {
-  outline: none;
-  min-height: 300px;
+.editor-content ul,
+.editor-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
 }
 
-.editor-content .ProseMirror p.is-editor-empty:first-child::before {
-  color: hsl(var(--muted-foreground));
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
-.editor-content .ProseMirror h1 {
-  font-size: 2em;
-  font-weight: 700;
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-.editor-content .ProseMirror h2 {
-  font-size: 1.5em;
-  font-weight: 600;
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-.editor-content .ProseMirror h3 {
-  font-size: 1.25em;
-  font-weight: 600;
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-.editor-content .ProseMirror p {
-  margin-bottom: 0.5em;
-}
-
-.editor-content .ProseMirror ul,
-.editor-content .ProseMirror ol {
-  padding-left: 1.5em;
-  margin-bottom: 0.5em;
-}
-
-.editor-content .ProseMirror ul {
-  list-style-type: disc;
-}
-
-.editor-content .ProseMirror ol {
-  list-style-type: decimal;
-}
-
-.editor-content .ProseMirror code {
+.editor-content pre {
   background-color: hsl(var(--muted));
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-  font-size: 0.875em;
-  font-family: ui-monospace, monospace;
-}
-
-.editor-content .ProseMirror pre {
-  background-color: hsl(var(--muted));
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
-  margin-bottom: 0.5em;
-}
-
-.editor-content .ProseMirror pre code {
-  background-color: transparent;
-  padding: 0;
-}
-
-.editor-content .ProseMirror blockquote {
-  border-left: 3px solid hsl(var(--border));
-  padding-left: 1rem;
-  margin-left: 0;
-  margin-bottom: 0.5em;
-  color: hsl(var(--muted-foreground));
-}
-
-.editor-content .ProseMirror img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 0.5rem;
-  margin: 1rem 0;
-}
-
-.editor-content .ProseMirror a {
-  color: hsl(var(--primary));
-  text-decoration: underline;
-}
-
-/* Code highlighting styles for rehype-pretty-code */
-.prose pre {
-  overflow-x: auto;
   border-radius: 0.5rem;
   padding: 1rem;
-  margin-top: 1.5rem;
-  margin-bottom: 1.5rem;
+  overflow-x: auto;
 }
 
-.prose code {
-  counter-reset: line;
-}
-
-.prose code[data-line-numbers] > [data-line]::before {
-  counter-increment: line;
-  content: counter(line);
-  display: inline-block;
-  width: 1rem;
-  margin-right: 1.5rem;
-  text-align: right;
-  color: #6b7280;
-}
-
-.prose code[data-line-numbers-max-digits="2"] > [data-line]::before {
-  width: 1.5rem;
-}
-
-.prose code[data-line-numbers-max-digits="3"] > [data-line]::before {
-  width: 2rem;
-}
-
-.prose [data-highlighted-line] {
-  background-color: rgba(59, 130, 246, 0.1);
-  border-left: 2px solid rgb(59, 130, 246);
-  padding-left: 0.75rem;
-  margin-left: -1rem;
-  margin-right: -1rem;
-  padding-right: 1rem;
-}
-
-.prose [data-highlighted-chars] {
-  background-color: rgba(59, 130, 246, 0.2);
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.25rem;
-}
-
-.prose :not(pre) > code {
+.editor-content code {
   background-color: hsl(var(--muted));
-  padding: 0.125rem 0.25rem;
+  padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
-  font-size: 0.875em;
+}
+
+.editor-content .katex-block {
+  overflow-x: auto;
 }

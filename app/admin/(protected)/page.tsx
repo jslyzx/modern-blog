@@ -1,132 +1,132 @@
-import { DashboardRefreshButton } from "@/components/admin/DashboardRefreshButton";
-import { Badge, type BadgeProps } from "@/components/ui/badge";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getLatestPosts, getMediaCount, getPostCounts, getTagCount, getUserCount } from "@/lib/admin/stats";
-import type { PostStatus } from "@/lib/admin/posts";
+import { getPostStats, listPosts } from "@/lib/admin/posts";
 
-export const dynamic = "force-dynamic";
+const formatNumber = (value: number) => new Intl.NumberFormat("en-US").format(value);
 
-const STATUS_LABELS: Record<PostStatus, string> = {
-  published: "已发布",
-  draft: "草稿",
-  archived: "已归档",
-};
-
-const STATUS_BADGE_VARIANTS: Record<PostStatus, BadgeProps["variant"]> = {
-  published: "success",
-  draft: "secondary",
-  archived: "outline",
-};
-
-const formatNumber = (value: number): string => new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
-
-const formatDateTime = (value: string | null): string => {
+const formatDate = (value: Date | null): string => {
   if (!value) {
     return "—";
   }
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
   try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(date);
-  } catch (error) {
-    console.warn("Failed to format date", { error });
-    return date.toLocaleString();
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(value);
+  } catch (_error) {
+    return value.toISOString();
   }
 };
 
 export default async function AdminHome() {
-  const [postCounts, tagCount, userCount, mediaCount, latestPosts] = await Promise.all([
-    getPostCounts(),
-    getTagCount(),
-    getUserCount(),
-    getMediaCount(),
-    getLatestPosts(5),
+  const [stats, recentPosts] = await Promise.all([
+    getPostStats(),
+    listPosts({ limit: 5, status: "all" }),
   ]);
 
-  const stats: Array<{ title: string; value: number }> = [
-    { title: "文章总数", value: postCounts.total },
-    { title: "已发布文章", value: postCounts.published },
-    { title: "草稿文章", value: postCounts.draft },
-    { title: "已归档文章", value: postCounts.archived },
-    { title: "标签数量", value: tagCount },
-    { title: "活跃用户", value: userCount },
-  ];
-
-  if (mediaCount !== null) {
-    stats.push({ title: "媒体资源数量", value: mediaCount });
-  }
-
-  const hasLatestPosts = latestPosts.length > 0;
-
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="space-y-10">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">欢迎访问管理后台</h1>
-          <p className="text-muted-foreground">查看最新的站点数据并快速管理内容。</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+          <p className="text-sm text-muted-foreground">
+            Review content performance and jump into managing posts, tags, and media.
+          </p>
         </div>
-        <DashboardRefreshButton />
+        <div className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href="/admin/posts/new">Create new post</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/admin/tags">Manage tags</Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">{formatNumber(stat.value)}</div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium text-muted-foreground">Total posts</CardTitle>
+            <CardDescription>Total content items in the system.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-3xl font-semibold text-foreground">{formatNumber(stats.total)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium text-muted-foreground">Published</CardTitle>
+            <CardDescription>Visible on the public blog.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-3xl font-semibold text-emerald-500">{formatNumber(stats.published)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium text-muted-foreground">Drafts</CardTitle>
+            <CardDescription>Awaiting review or publication.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-3xl font-semibold text-amber-500">{formatNumber(stats.draft)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium text-muted-foreground">Archived</CardTitle>
+            <CardDescription>No longer publicly accessible.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-3xl font-semibold text-muted-foreground">{formatNumber(stats.archived)}</CardContent>
+        </Card>
       </div>
 
       <Card>
-        <CardHeader className="gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
           <div>
-            <CardTitle className="text-xl">最新文章</CardTitle>
-            <CardDescription>展示最近创建或更新的文章，方便快速跟进内容状态。</CardDescription>
+            <CardTitle className="text-lg font-semibold">Recent posts</CardTitle>
+            <CardDescription>Latest published and draft entries.</CardDescription>
           </div>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/admin/posts" className="flex items-center gap-1">
+              View all
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
         </CardHeader>
-        <CardContent className="p-0">
-          {hasLatestPosts ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>标题</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>创建时间</TableHead>
-                  <TableHead>发布时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {latestPosts.map((post) => (
-                  <TableRow key={post.id}>
-                    <TableCell className="space-y-1">
-                      <div className="font-medium">{post.title}</div>
-                      <div className="text-xs text-muted-foreground">链接别名：{post.slug || "—"}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={STATUS_BADGE_VARIANTS[post.status]}>{STATUS_LABELS[post.status]}</Badge>
-                    </TableCell>
-                    <TableCell>{formatDateTime(post.createdAt)}</TableCell>
-                    <TableCell>{formatDateTime(post.publishedAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="p-6 text-sm text-muted-foreground">暂时没有最新文章记录。</div>
-          )}
+        <CardContent className="px-0">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-6 py-3 font-medium">Title</th>
+                  <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium">Published</th>
+                  <th className="px-6 py-3 font-medium">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentPosts.length ? (
+                  recentPosts.map((post) => (
+                    <tr key={post.id} className="border-b last:border-0">
+                      <td className="px-6 py-3">
+                        <Link href={`/admin/posts/${post.id}/edit`} className="font-medium text-foreground hover:underline">
+                          {post.title}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 capitalize">{post.status}</td>
+                      <td className="px-6 py-3">{formatDate(post.publishedAt)}</td>
+                      <td className="px-6 py-3">{formatDate(post.updatedAt)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-6 text-center text-sm text-muted-foreground">
+                      No posts yet. Start by creating a new post.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </section>

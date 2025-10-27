@@ -1,5 +1,6 @@
 import mysql, {
   type Pool,
+  type PoolConnection,
   type PoolOptions,
   type ResultSetHeader,
   type RowDataPacket,
@@ -68,6 +69,47 @@ export const query = async <T = RowDataPacket[] | ResultSetHeader>(
     });
 
     throw error;
+  }
+};
+
+export const queryWithConnection = async <T = RowDataPacket[] | ResultSetHeader>(
+  connection: PoolConnection,
+  sql: string,
+  params: QueryParams = [],
+): Promise<T> => {
+  try {
+    const [rows] = await connection.query(sql, params as unknown);
+
+    return rows as T;
+  } catch (error) {
+    console.error("Database query failed", {
+      sql,
+      params,
+      error,
+    });
+
+    throw error;
+  }
+};
+
+export const withTransaction = async <T>(callback: (connection: PoolConnection) => Promise<T>): Promise<T> => {
+  const connection = await getPool().getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const result = await callback(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("Failed to rollback transaction", { rollbackError });
+    }
+
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 

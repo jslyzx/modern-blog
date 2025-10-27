@@ -1,10 +1,14 @@
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
-import AdminNav from "@/components/admin/AdminNav";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { auth } from "@/auth";
 
-export default async function AdminLayout({ children }: { children: ReactNode }) {
+interface AdminLayoutProps {
+  children: ReactNode;
+}
+
+export default async function AdminLayout({ children }: AdminLayoutProps) {
   const session = await auth();
 
   if (!session?.user) {
@@ -14,10 +18,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const userLabel = session.user.name ?? session.user.email ?? "已登录用户";
 
   return (
-    <div className="flex min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/30 lg:flex">
       <AdminNav userLabel={userLabel} />
-      <main className="flex-1 overflow-auto bg-background">
-        <div className="mx-auto h-full w-full max-w-5xl p-8">{children}</div>
+      <main className="flex-1">
+        <div className="px-4 pb-12 pt-6 sm:px-6 lg:px-10 lg:py-12">
+          <div className="mx-auto w-full max-w-6xl space-y-8">
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   );

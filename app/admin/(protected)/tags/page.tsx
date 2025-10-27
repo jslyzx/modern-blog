@@ -1,40 +1,28 @@
-import { TagManagement, type TagSummary } from "@/components/admin/tags/TagManagement";
-import { listTags } from "@/lib/tags";
+import Link from "next/link";
 
-const PAGE_SIZE = 20;
+import { TagManager } from "@/components/admin/tag-manager";
+import { Button } from "@/components/ui/button";
+import { listTags } from "@/lib/admin/tags";
 
-const serializeTag = (tag: Awaited<ReturnType<typeof listTags>>["tags"][number]): TagSummary => ({
-  id: tag.id,
-  name: tag.name,
-  slug: tag.slug,
-  postCount: tag.postCount,
-  createdAt: tag.createdAt ? tag.createdAt.toISOString() : null,
-  updatedAt: tag.updatedAt ? tag.updatedAt.toISOString() : null,
-});
+export const metadata = {
+  title: "Manage tags",
+};
 
 export default async function TagsPage() {
-  const { tags, total } = await listTags({ limit: PAGE_SIZE, offset: 0 });
-  const initialTags = tags.map(serializeTag);
-  const pageCount = PAGE_SIZE > 0 ? Math.ceil(total / PAGE_SIZE) : 0;
+  const tags = await listTags();
 
   return (
     <section className="space-y-6">
-      <header className="border-b pb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">标签管理</h1>
-        <p className="text-muted-foreground">创建、更新与删除标签，并查看每个标签关联的文章数量。</p>
-      </header>
-
-      <TagManagement
-        initialTags={initialTags}
-        initialPagination={{
-          page: 1,
-          pageSize: PAGE_SIZE,
-          total,
-          pageCount,
-          hasNextPage: pageCount > 1,
-          hasPrevPage: false,
-        }}
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tags</h1>
+          <p className="text-sm text-muted-foreground">Organize posts with keywords and topical labels.</p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href="/admin/posts">Back to posts</Link>
+        </Button>
+      </div>
+      <TagManager initialTags={tags} />
     </section>
   );
 }

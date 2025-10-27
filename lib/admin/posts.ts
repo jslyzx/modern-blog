@@ -1,64 +1,90 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
-import { getPool, query } from "@/lib/db";
-import { randomSlugId } from "@/lib/slug";
-import { getAllTagOptions, replacePostTags, type TagOption } from "@/lib/tags";
+import { query, queryWithConnection, withTransaction } from "@/lib/db";
+import type { TagOption } from "@/lib/admin/tags";
+import { getTagsForPost } from "@/lib/admin/tags";
 
-export const POST_STATUS_VALUES = ["published", "draft", "archived"] as const;
-export type PostStatus = (typeof POST_STATUS_VALUES)[number];
+export type PostStatus = "draft" | "published" | "archived";
 
-export const POST_STATUS_FILTERS = ["all", ...POST_STATUS_VALUES] as const;
-export type PostStatusFilter = (typeof POST_STATUS_FILTERS)[number];
+export interface PostStats {
+  total: number;
+  published: number;
+  draft: number;
+  archived: number;
+}
 
-const POST_STATUS_VALUE_SET = new Set<string>(POST_STATUS_VALUES);
-const POST_STATUS_FILTER_SET = new Set<string>(POST_STATUS_FILTERS);
+export interface ListPostsParams {
+  search?: string;
+  status?: PostStatus | "all";
+  limit?: number;
+  offset?: number;
+}
 
-export const DEFAULT_POST_STATUS_FILTER: PostStatusFilter = "all";
-
-type AdminPostRow = RowDataPacket & {
+export interface BasePost {
   id: number;
-  slug: string;
   title: string;
-  status: string | null;
-  created_at: Date | string;
-  updated_at: Date | string | null;
-  published_at: Date | string | null;
-  author_id: number | null;
-  author_username: string | null;
-  author_email: string | null;
-};
-
-export interface AdminPost {
-  id: number;
   slug: string;
-  title: string;
   status: PostStatus;
-  createdAt: string;
-  updatedAt: string | null;
-  publishedAt: string | null;
+  excerpt: string | null;
+  coverImageUrl: string | null;
+  allowComments: boolean;
+  featured: boolean;
   authorId: number | null;
   authorName: string | null;
-  authorEmail: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  publishedAt: Date | null;
 }
 
-export interface AdminPostsQuery {
-  status?: PostStatusFilter | null;
-  search?: string | null;
+export interface AdminPostSummary extends BasePost {}
+
+export interface AdminPostDetails extends BasePost {
+  content: string;
+  tags: TagOption[];
 }
 
-export const isPostStatus = (value: unknown): value is PostStatus =>
-  typeof value === "string" && POST_STATUS_VALUE_SET.has(value);
+export interface CreatePostInput {
+  title: string;
+  slug: string;
+  content: string;
+  excerpt: string | null;
+  coverImageUrl: string | null;
+  status: PostStatus;
+  allowComments: boolean;
+  featured: boolean;
+  tagIds: number[];
+  authorId?: number | null;
+  publishedAt?: Date | null;
+}
 
-export const isPostStatusFilter = (value: unknown): value is PostStatusFilter =>
-  typeof value === "string" && POST_STATUS_FILTER_SET.has(value);
+export interface UpdatePostInput extends CreatePostInput {}
 
-const toIsoString = (value: Date | string | null): string | null => {
+interface PostRow extends RowDataPacket {
+  id: number;
+  title: string;
+  slug: string;
+  status?: string | null;
+  statusRaw?: string | null;
+  excerpt?: string | null;
+  coverImageUrl?: string | null;
+  content?: string | null;
+  allowComments?: number | boolean | null;
+  isFeatured?: number | boolean | null;
+  authorId?: number | null;
+  authorName?: string | null;
+  authorEmail?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  publishedAt?: Date | string | null;
+}
+
+const toDate = (value: Date | string | null | undefined): Date | null => {
   if (!value) {
     return null;
   }
 
   if (value instanceof Date) {
-    return value.toISOString();
+    return value;
   }
 
   const parsed = new Date(value);
@@ -67,209 +93,179 @@ const toIsoString = (value: Date | string | null): string | null => {
     return null;
   }
 
-  return parsed.toISOString();
+  return parsed;
 };
 
-const mapRowToAdminPost = (row: AdminPostRow): AdminPost => ({
+const toBoolean = (value: number | boolean | string | null | undefined): boolean => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+  }
+
+  return false;
+};
+
+const resolveStatus = (row: PostRow): PostStatus => {
+  const raw = (row.statusRaw ?? row.status ?? "").toString().toLowerCase();
+
+  if (raw === "published" || raw === "draft" || raw === "archived") {
+    return raw;
+  }
+
+  if (row.publishedAt) {
+    return "published";
+  }
+
+  return "draft";
+};
+
+const mapPostSummary = (row: PostRow): AdminPostSummary => ({
   id: row.id,
-  slug: row.slug,
   title: row.title,
-  status: isPostStatus(row.status) ? row.status : "draft",
-  createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
-  updatedAt: toIsoString(row.updated_at),
-  publishedAt: toIsoString(row.published_at),
-  authorId: typeof row.author_id === "number" ? row.author_id : null,
-  authorName: row.author_username ?? null,
-  authorEmail: row.author_email ?? null,
+  slug: row.slug,
+  status: resolveStatus(row),
+  excerpt: row.excerpt ?? null,
+  coverImageUrl: row.coverImageUrl ?? null,
+  allowComments: toBoolean(row.allowComments ?? null),
+  featured: toBoolean(row.isFeatured ?? null),
+  authorId: typeof row.authorId === "number" ? row.authorId : null,
+  authorName: row.authorName ?? row.authorEmail ?? null,
+  createdAt: toDate(row.createdAt ?? null),
+  updatedAt: toDate(row.updatedAt ?? null),
+  publishedAt: toDate(row.publishedAt ?? null),
 });
 
-type SlugLookupRow = RowDataPacket & {
-  id: number;
-};
+const mapPostDetails = (row: PostRow, tags: TagOption[]): AdminPostDetails => ({
+  ...mapPostSummary(row),
+  content: row.content ?? "",
+  tags,
+});
 
-export interface UniqueSlugOptions {
-  excludeId?: number;
-}
-
-export async function isPostSlugTaken(slug: string, excludeId?: number): Promise<boolean> {
-  if (!slug) {
-    return false;
+const buildStatusCondition = (status?: PostStatus | "all"): string | null => {
+  if (!status || status === "all") {
+    return null;
   }
-
-  let sql = "SELECT id FROM posts WHERE slug = ?";
-  const params: Array<string | number> = [slug];
-
-  if (typeof excludeId === "number") {
-    sql += " AND id <> ?";
-    params.push(excludeId);
-  }
-
-  sql += " LIMIT 1";
-
-  const rows = await query<SlugLookupRow[]>(sql, params);
-
-  return rows.length > 0;
-}
-
-const INCREMENTAL_SUFFIX_LIMIT = 10;
-const RANDOM_SUFFIX_ATTEMPTS = 5;
-
-export async function ensureUniquePostSlug(baseSlug: string, options: UniqueSlugOptions = {}): Promise<string> {
-  let slug = baseSlug || `post-${randomSlugId()}`;
-  const { excludeId } = options;
-
-  if (!(await isPostSlugTaken(slug, excludeId))) {
-    return slug;
-  }
-
-  const base = slug;
-
-  for (let increment = 2; increment <= INCREMENTAL_SUFFIX_LIMIT + 1; increment += 1) {
-    const candidate = `${base}-${increment}`;
-
-    if (!(await isPostSlugTaken(candidate, excludeId))) {
-      return candidate;
-    }
-  }
-
-  for (let attempt = 0; attempt < RANDOM_SUFFIX_ATTEMPTS; attempt += 1) {
-    const candidate = `${base}-${randomSlugId()}`;
-
-    if (!(await isPostSlugTaken(candidate, excludeId))) {
-      return candidate;
-    }
-  }
-
-  throw new Error("Unable to generate a unique slug");
-}
-
-export async function getAdminPosts(queryOptions: AdminPostsQuery = {}): Promise<AdminPost[]> {
-  const status = queryOptions.status && isPostStatusFilter(queryOptions.status) ? queryOptions.status : DEFAULT_POST_STATUS_FILTER;
-  const search = queryOptions.search?.trim() ?? "";
-
-  let sql = `
-    SELECT
-      p.id,
-      p.slug,
-      p.title,
-      p.status,
-      p.created_at,
-      p.updated_at,
-      p.published_at,
-      p.author_id,
-      u.username AS author_username,
-      u.email AS author_email
-    FROM posts p
-    LEFT JOIN users u ON u.id = p.author_id
-    WHERE 1 = 1
-  `;
-
-  const params: Array<string | number> = [];
-
-  if (status !== "all") {
-    sql += " AND p.status = ?";
-    params.push(status);
-  }
-
-  if (search) {
-    sql += " AND p.title LIKE ?";
-    params.push(`%${search}%`);
-  }
-
-  sql += " ORDER BY p.created_at DESC";
-
-  const rows = await query<AdminPostRow[]>(sql, params);
-
-  return rows.map(mapRowToAdminPost);
-}
-
-export async function deletePostById(id: number): Promise<boolean> {
-  const result = await query<ResultSetHeader>("DELETE FROM posts WHERE id = ?", [id]);
-  return result.affectedRows > 0;
-}
-
-export async function updatePostStatus(id: number, status: PostStatus): Promise<boolean> {
-  if (!isPostStatus(status)) {
-    throw new Error(`Unsupported post status: ${status}`);
-  }
-
-  let sql = "UPDATE posts SET status = ?";
-  const params: Array<string | number> = [status];
 
   if (status === "published") {
-    sql += ", published_at = CASE WHEN published_at IS NULL THEN NOW() ELSE published_at END";
-  } else if (status === "draft") {
-    sql += ", published_at = NULL";
+    return "(p.status = 'published' OR (p.status IS NULL AND p.published_at IS NOT NULL))";
   }
 
-  sql += ", updated_at = NOW() WHERE id = ?";
-  params.push(id);
+  if (status === "draft") {
+    return "(p.status = 'draft' OR (p.status IS NULL AND p.published_at IS NULL))";
+  }
 
-  const result = await query<ResultSetHeader>(sql, params);
-
-  return result.affectedRows > 0;
-}
-
-type AdminPostDetailRow = RowDataPacket & {
-  id: number;
-  slug: string;
-  title: string;
-  summary: string | null;
-  content_html: string | null;
-  cover_image_url: string | null;
-  status: string | null;
-  is_featured: number | null;
-  allow_comments: number | null;
-  created_at: Date | string;
-  updated_at: Date | string | null;
-  published_at: Date | string | null;
-  author_id: number | null;
-  tag_id: number | null;
-  tag_name: string | null;
-  tag_slug: string | null;
+  return "p.status = 'archived'";
 };
 
+export const listPosts = async ({
+  search,
+  status,
+  limit = 50,
+  offset = 0,
+}: ListPostsParams = {}): Promise<AdminPostSummary[]> => {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
 
-export interface AdminPostDetail {
-  id: number;
-  slug: string;
-  title: string;
-  summary: string;
-  contentHtml: string;
-  coverImageUrl: string;
-  status: PostStatus;
-  isFeatured: boolean;
-  allowComments: boolean;
-  createdAt: string;
-  updatedAt: string | null;
-  publishedAt: string | null;
-  authorId: number | null;
-  tags: Array<{ id: number; name: string; slug: string }>;
-}
+  const statusCondition = buildStatusCondition(status);
 
-export async function getPostById(id: number): Promise<AdminPostDetail | null> {
-  const rows = await query<AdminPostDetailRow[]>(
+  if (statusCondition) {
+    conditions.push(statusCondition);
+  }
+
+  if (search?.trim()) {
+    const like = `%${search.trim()}%`;
+    conditions.push("(p.title LIKE ? OR p.slug LIKE ?)");
+    params.push(like, like);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  params.push(limit);
+  params.push(offset);
+
+  const rows = await query<PostRow[]>(
     `SELECT
-      p.id,
-      p.slug,
-      p.title,
-      p.summary,
-      p.content_html,
-      p.cover_image_url,
-      p.status,
-      p.is_featured,
-      p.allow_comments,
-      p.created_at,
-      p.updated_at,
-      p.published_at,
-      p.author_id,
-      t.id AS tag_id,
-      t.name AS tag_name,
-      t.slug AS tag_slug
-    FROM posts p
-    LEFT JOIN post_tags pt ON pt.post_id = p.id
-    LEFT JOIN tags t ON t.id = pt.tag_id
-    WHERE p.id = ?`,
+       p.id,
+       p.title,
+       p.slug,
+       p.status AS statusRaw,
+       p.excerpt,
+       p.cover_image_url AS coverImageUrl,
+       p.allow_comments AS allowComments,
+       p.is_featured AS isFeatured,
+       p.created_at AS createdAt,
+       p.updated_at AS updatedAt,
+       p.published_at AS publishedAt,
+       p.author_id AS authorId,
+       u.username AS authorName,
+       u.email AS authorEmail
+     FROM posts p
+     LEFT JOIN users u ON u.id = p.author_id
+     ${whereClause}
+     ORDER BY p.created_at DESC
+     LIMIT ? OFFSET ?`,
+    params,
+  );
+
+  return rows.map(mapPostSummary);
+};
+
+export const countPosts = async ({ search, status }: Omit<ListPostsParams, "limit" | "offset"> = {}): Promise<number> => {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  const statusCondition = buildStatusCondition(status);
+
+  if (statusCondition) {
+    conditions.push(statusCondition);
+  }
+
+  if (search?.trim()) {
+    const like = `%${search.trim()}%`;
+    conditions.push("(p.title LIKE ? OR p.slug LIKE ?)");
+    params.push(like, like);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const rows = await query<Array<RowDataPacket & { total: number }>>(
+    `SELECT COUNT(*) AS total FROM posts p ${whereClause}`,
+    params,
+  );
+
+  return rows[0]?.total ?? 0;
+};
+
+export const getPostById = async (id: number): Promise<AdminPostDetails | null> => {
+  const rows = await query<PostRow[]>(
+    `SELECT
+       p.id,
+       p.title,
+       p.slug,
+       p.status AS statusRaw,
+       p.excerpt,
+       p.cover_image_url AS coverImageUrl,
+       p.content,
+       p.allow_comments AS allowComments,
+       p.is_featured AS isFeatured,
+       p.created_at AS createdAt,
+       p.updated_at AS updatedAt,
+       p.published_at AS publishedAt,
+       p.author_id AS authorId,
+       u.username AS authorName,
+       u.email AS authorEmail
+     FROM posts p
+     LEFT JOIN users u ON u.id = p.author_id
+     WHERE p.id = ?
+     LIMIT 1`,
     [id],
   );
 
@@ -277,194 +273,176 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
     return null;
   }
 
-  const baseRow = rows[0];
+  const tags = await getTagsForPost(id);
 
-  const tagsMap = new Map<number, { id: number; name: string; slug: string }>();
+  return mapPostDetails(rows[0], tags);
+};
 
-  for (const row of rows) {
-    if (typeof row.tag_id === "number" && row.tag_id > 0 && typeof row.tag_name === "string") {
-      if (!tagsMap.has(row.tag_id)) {
-        tagsMap.set(row.tag_id, {
-          id: row.tag_id,
-          name: row.tag_name,
-          slug: row.tag_slug ?? "",
-        });
-      }
-    }
-  }
+export const getPostStats = async (): Promise<PostStats> => {
+  const rows = await query<Array<RowDataPacket & PostStats>>(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN p.status = 'published' OR (p.status IS NULL AND p.published_at IS NOT NULL) THEN 1 ELSE 0 END) AS published,
+       SUM(CASE WHEN (p.status = 'draft' OR p.status IS NULL) AND p.published_at IS NULL THEN 1 ELSE 0 END) AS draft,
+       SUM(CASE WHEN p.status = 'archived' THEN 1 ELSE 0 END) AS archived
+     FROM posts p`,
+  );
+
+  const row = rows[0];
 
   return {
-    id: baseRow.id,
-    slug: baseRow.slug,
-    title: baseRow.title,
-    summary: baseRow.summary ?? "",
-    contentHtml: baseRow.content_html ?? "",
-    coverImageUrl: baseRow.cover_image_url ?? "",
-    status: isPostStatus(baseRow.status) ? baseRow.status : "draft",
-    isFeatured: baseRow.is_featured === null ? false : Boolean(baseRow.is_featured),
-    allowComments: baseRow.allow_comments === null ? true : Boolean(baseRow.allow_comments),
-    createdAt: toIsoString(baseRow.created_at) ?? new Date().toISOString(),
-    updatedAt: toIsoString(baseRow.updated_at),
-    publishedAt: toIsoString(baseRow.published_at),
-    authorId: baseRow.author_id,
-    tags: Array.from(tagsMap.values()),
+    total: row?.total ?? 0,
+    published: row?.published ?? 0,
+    draft: row?.draft ?? 0,
+    archived: row?.archived ?? 0,
   };
-}
+};
 
-export interface CreatePostInput {
-  title: string;
-  slug: string;
-  summary: string;
-  contentHtml: string;
-  coverImageUrl: string;
-  status: PostStatus;
-  isFeatured: boolean;
-  allowComments: boolean;
-  authorId: number;
-  tagIds: number[];
-}
+export const createPost = async (input: CreatePostInput): Promise<AdminPostDetails> => {
+  const postId = await withTransaction(async (connection) => {
+    const publishedAtValue = input.status === "published" ? input.publishedAt ?? new Date() : null;
 
-export async function createPost(input: CreatePostInput): Promise<number> {
-  const pool = getPool();
-  let connection: PoolConnection | null = null;
-
-  try {
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-
-    const publishedAtExpression = input.status === "published" ? "NOW()" : "NULL";
-
-    const [result] = await connection.query<ResultSetHeader>(
+    const result = await queryWithConnection<ResultSetHeader>(
+      connection,
       `INSERT INTO posts (
-        title,
-        slug,
-        summary,
-        content_html,
-        cover_image_url,
-        status,
-        is_featured,
-        allow_comments,
-        author_id,
-        published_at,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${publishedAtExpression}, NOW(), NOW())`,
+         title,
+         slug,
+         content,
+         excerpt,
+         cover_image_url,
+         status,
+         allow_comments,
+         is_featured,
+         author_id,
+         published_at,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         input.title,
         input.slug,
-        input.summary,
-        input.contentHtml,
-        input.coverImageUrl || null,
+        input.content,
+        input.excerpt ?? null,
+        input.coverImageUrl ?? null,
         input.status,
-        input.isFeatured ? 1 : 0,
         input.allowComments ? 1 : 0,
-        input.authorId,
+        input.featured ? 1 : 0,
+        input.authorId ?? null,
+        publishedAtValue,
       ],
     );
 
-    const postId = result.insertId;
+    const createdId = Number(result.insertId);
 
-    await replacePostTags(connection, postId, input.tagIds);
+    if (input.tagIds.length) {
+      const placeholders = input.tagIds.map(() => "(?, ?)").join(", ");
+      const values: Array<number> = [];
 
-    await connection.commit();
+      input.tagIds.forEach((tagId) => {
+        values.push(createdId, tagId);
+      });
 
-    return postId;
-  } catch (error) {
-    if (connection) {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        console.error("Failed to rollback createPost transaction", { error: rollbackError });
-      }
+      await queryWithConnection(connection, `INSERT INTO post_tags (post_id, tag_id) VALUES ${placeholders}`, values);
     }
 
-    throw error;
-  } finally {
-    if (connection) {
-      connection.release();
-    }
+    return createdId;
+  });
+
+  const post = await getPostById(postId);
+
+  if (!post) {
+    throw new Error("Failed to load post after creation");
   }
-}
 
-export interface UpdatePostInput {
-  title: string;
-  slug: string;
-  summary: string;
-  contentHtml: string;
-  coverImageUrl: string;
-  status: PostStatus;
-  isFeatured: boolean;
-  allowComments: boolean;
-  tagIds: number[];
-}
+  return post;
+};
 
-export async function updatePost(id: number, input: UpdatePostInput): Promise<boolean> {
-  const pool = getPool();
-  let connection: PoolConnection | null = null;
+export const updatePost = async (id: number, input: UpdatePostInput): Promise<AdminPostDetails> => {
+  const postId = await withTransaction(async (connection) => {
+    const rows = await queryWithConnection<PostRow[]>(
+      connection,
+      `SELECT p.id, p.published_at AS publishedAt, p.status AS statusRaw FROM posts p WHERE p.id = ? FOR UPDATE`,
+      [id],
+    );
 
-  try {
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
+    if (!rows.length) {
+      throw new Error("Post not found");
+    }
 
-    const [result] = await connection.query<ResultSetHeader>(
-      `UPDATE posts SET
-        title = ?,
-        slug = ?,
-        summary = ?,
-        content_html = ?,
-        cover_image_url = ?,
-        status = ?,
-        is_featured = ?,
-        allow_comments = ?,
-        updated_at = NOW(),
-        published_at = CASE
-          WHEN ? = 'published' AND published_at IS NULL THEN NOW()
-          WHEN ? = 'draft' THEN NULL
-          ELSE published_at
-        END
-      WHERE id = ?`,
+    const existing = rows[0];
+    const existingPublishedAt = toDate(existing.publishedAt ?? null);
+
+    let publishedAtValue: Date | null = null;
+
+    if (input.status === "published") {
+      publishedAtValue = input.publishedAt ?? existingPublishedAt ?? new Date();
+    } else if (input.status === "archived") {
+      publishedAtValue = existingPublishedAt ?? null;
+    } else {
+      publishedAtValue = null;
+    }
+
+    await queryWithConnection<ResultSetHeader>(
+      connection,
+      `UPDATE posts
+       SET title = ?,
+           slug = ?,
+           content = ?,
+           excerpt = ?,
+           cover_image_url = ?,
+           status = ?,
+           allow_comments = ?,
+           is_featured = ?,
+           author_id = ?,
+           published_at = ?,
+           updated_at = NOW()
+       WHERE id = ?`,
       [
         input.title,
         input.slug,
-        input.summary,
-        input.contentHtml,
-        input.coverImageUrl || null,
+        input.content,
+        input.excerpt ?? null,
+        input.coverImageUrl ?? null,
         input.status,
-        input.isFeatured ? 1 : 0,
         input.allowComments ? 1 : 0,
-        input.status,
-        input.status,
+        input.featured ? 1 : 0,
+        input.authorId ?? null,
+        publishedAtValue,
         id,
       ],
     );
 
-    if (result.affectedRows === 0) {
-      await connection.rollback();
-      return false;
+    await queryWithConnection(connection, `DELETE FROM post_tags WHERE post_id = ?`, [id]);
+
+    if (input.tagIds.length) {
+      const placeholders = input.tagIds.map(() => "(?, ?)").join(", ");
+      const values: Array<number> = [];
+
+      input.tagIds.forEach((tagId) => {
+        values.push(id, tagId);
+      });
+
+      await queryWithConnection(connection, `INSERT INTO post_tags (post_id, tag_id) VALUES ${placeholders}`, values);
     }
 
-    await replacePostTags(connection, id, input.tagIds);
+    return id;
+  });
 
-    await connection.commit();
+  const post = await getPostById(postId);
 
-    return true;
-  } catch (error) {
-    if (connection) {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        console.error("Failed to rollback updatePost transaction", { error: rollbackError });
-      }
-    }
-
-    throw error;
-  } finally {
-    if (connection) {
-      connection.release();
-    }
+  if (!post) {
+    throw new Error("Failed to load post after update");
   }
-}
 
-export async function getAllTags(): Promise<TagOption[]> {
-  return getAllTagOptions();
-}
+  return post;
+};
+
+export const deletePost = async (id: number): Promise<boolean> => {
+  return withTransaction(async (connection) => {
+    await queryWithConnection(connection, `DELETE FROM post_tags WHERE post_id = ?`, [id]);
+
+    const result = await queryWithConnection<ResultSetHeader>(connection, `DELETE FROM posts WHERE id = ?`, [id]);
+
+    return result.affectedRows > 0;
+  });
+};

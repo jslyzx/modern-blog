@@ -1,230 +1,166 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
 
 import { auth } from "@/auth";
 import {
-  deletePostById,
-  ensureUniquePostSlug,
+  deletePost,
   getPostById,
-  isPostStatus,
-  type PostStatus,
   updatePost,
-  updatePostStatus,
 } from "@/lib/admin/posts";
-import { generateSlug } from "@/lib/slug";
+
+const paramsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+const payloadSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  slug: z.string().min(1, "Slug is required"),
+  content: z.string().min(1, "Content is required"),
+  excerpt: z.string().optional().nullable(),
+  coverImageUrl: z.string().optional().nullable(),
+  status: z.enum(["draft", "published", "archived"]),
+  allowComments: z.boolean().optional().default(true),
+  featured: z.boolean().optional().default(false),
+  tagIds: z.array(z.coerce.number().int().positive()).optional().default([]),
+  publishedAt: z.string().datetime().optional().nullable(),
+});
+
+const normalizeOptional = (value?: string | null) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed.length ? trimmed : null;
+};
 
 type RouteContext = {
   params: {
-    id?: string | string[];
+    id: string;
   };
 };
 
-const parseId = (value: string | string[] | undefined): number | null => {
-  const rawValue = Array.isArray(value) ? value[0] : value;
+const resolveId = (context: RouteContext): number | null => {
+  const parsed = paramsSchema.safeParse(context.params);
 
-  if (!rawValue) {
+  if (!parsed.success) {
     return null;
   }
 
-  const parsed = Number.parseInt(rawValue, 10);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
-
-  return parsed;
+  return parsed.data.id;
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
-
-const parseTagIds = (value: unknown): number[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const uniqueIds = new Set<number>();
-
-  for (const element of value) {
-    let candidate: number | null = null;
-
-    if (typeof element === "number") {
-      candidate = element;
-    } else if (typeof element === "string") {
-      const parsed = Number.parseInt(element, 10);
-
-      if (Number.isFinite(parsed)) {
-        candidate = parsed;
-      }
-    }
-
-    if (candidate === null || !Number.isFinite(candidate)) {
-      continue;
-    }
-
-    const normalized = Math.trunc(candidate);
-
-    if (normalized > 0) {
-      uniqueIds.add(normalized);
-    }
-  }
-
-  return Array.from(uniqueIds);
-};
-
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: NextRequest, context: RouteContext) {
   const session = await auth();
 
   if (!session?.user) {
-    return unauthorized();
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const postId = parseId(context.params.id);
+  const id = resolveId(context);
 
-  if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
   }
 
-  try {
-    const post = await getPostById(postId);
+  const post = await getPostById(id);
 
-    if (!post) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
-    }
-
-    return NextResponse.json({ post });
-  } catch (error) {
-    console.error("Failed to fetch post", { postId, error });
-    return NextResponse.json({ error: "获取文章失败" }, { status: 500 });
+  if (!post) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
+
+  return NextResponse.json({ data: post });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function PUT(request: NextRequest, context: RouteContext) {
   const session = await auth();
 
   if (!session?.user) {
-    return unauthorized();
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const postId = parseId(context.params.id);
+  const id = resolveId(context);
 
-  if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
   }
 
-  try {
-    const deleted = await deletePostById(postId);
+  const json = await request.json();
+  const parsed = payloadSchema.safeParse(json);
 
-    if (!deleted) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Failed to delete post", { postId, error });
-    return NextResponse.json({ error: "删除文章失败。" }, { status: 500 });
-  }
-}
-
-export async function PATCH(request: Request, context: RouteContext) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return unauthorized();
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      },
+      { status: 400 },
+    );
   }
 
-  const postId = parseId(context.params.id);
+  const userIdRaw = session.user.id;
+  const authorId = typeof userIdRaw === "string" ? Number.parseInt(userIdRaw, 10) : null;
+  const payload = parsed.data;
 
-  if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
-  }
+  const tagIds = Array.from(new Set(payload.tagIds ?? [])).filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+  const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
 
-  let payload: unknown;
-
-  try {
-    payload = await request.json();
-  } catch (error) {
-    console.warn("Failed to parse PATCH body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
-  }
-
-  const requestedStatus = (payload as { status?: unknown })?.status;
-
-  if (typeof requestedStatus !== "string" || !isPostStatus(requestedStatus)) {
-    return NextResponse.json({ error: "状态无效" }, { status: 400 });
-  }
-
-  const status = requestedStatus as PostStatus;
-
-  try {
-    const updated = await updatePostStatus(postId, status);
-
-    if (!updated) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true, status });
-  } catch (error) {
-    console.error("Failed to update post status", { postId, status, error });
-    return NextResponse.json({ error: "更新文章状态失败。" }, { status: 500 });
-  }
-}
-
-export async function PUT(request: Request, context: RouteContext) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return unauthorized();
-  }
-
-  const postId = parseId(context.params.id);
-
-  if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
-  }
-
-  let payload: unknown;
-
-  try {
-    payload = await request.json();
-  } catch (error) {
-    console.warn("Failed to parse PUT body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
-  }
-
-  const data = payload as any;
-
-  if (!data.title || typeof data.title !== "string") {
-    return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
+  if (publishedAt && Number.isNaN(publishedAt.getTime())) {
+    return NextResponse.json({ error: "Invalid publishedAt value" }, { status: 400 });
   }
 
   try {
-    const requestedSlug = typeof data.slug === "string" ? data.slug : "";
-    const slugCandidate = requestedSlug.trim() ? generateSlug(requestedSlug) : generateSlug(data.title);
-    const slug = await ensureUniquePostSlug(slugCandidate, { excludeId: postId });
-
-    const contentHtml = typeof data.contentHtml === "string" ? data.contentHtml : typeof data.content === "string" ? data.content : "";
-    const isFeatured = typeof data.isFeatured === "boolean" ? data.isFeatured : Boolean(data.featured);
-    const allowComments = Boolean(data.allowComments ?? true);
-    const tagIds = parseTagIds(data.tagIds ?? data.tags);
-
-    const updated = await updatePost(postId, {
-      title: data.title,
-      slug,
-      summary: typeof data.summary === "string" ? data.summary : "",
-      contentHtml,
-      coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : "",
-      status: (data.status || "draft") as PostStatus,
-      isFeatured,
-      allowComments,
+    const post = await updatePost(id, {
+      title: payload.title.trim(),
+      slug: payload.slug.trim(),
+      content: payload.content,
+      excerpt: normalizeOptional(payload.excerpt),
+      coverImageUrl: normalizeOptional(payload.coverImageUrl),
+      status: payload.status,
+      allowComments: payload.allowComments ?? true,
+      featured: payload.featured ?? false,
       tagIds,
+      authorId: Number.isFinite(authorId) ? authorId : null,
+      publishedAt,
     });
 
-    if (!updated) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+    return NextResponse.json({ data: post });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+
+    if (code === "ER_DUP_ENTRY") {
+      return NextResponse.json({ error: "Slug must be unique" }, { status: 409 });
     }
 
-    return NextResponse.json({ success: true });
+    console.error("Failed to update post", error);
+    return NextResponse.json({ error: "Failed to update post" }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const id = resolveId(context);
+
+  if (!id) {
+    return NextResponse.json({ error: "Invalid post id" }, { status: 400 });
+  }
+
+  try {
+    const deleted = await deletePost(id);
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("Failed to update post", { postId, error });
-    return NextResponse.json({ error: "更新文章失败" }, { status: 500 });
+    console.error("Failed to delete post", error);
+    return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
   }
 }

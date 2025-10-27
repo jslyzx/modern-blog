@@ -1,152 +1,126 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
 
 import { auth } from "@/auth";
-import {
-  deleteTag,
-  getTagById,
-  isTagNameTaken,
-  normalizeTagName,
-  type TagRecord,
-  updateTag,
-} from "@/lib/tags";
+import { deleteTag, getTagById, updateTag } from "@/lib/admin/tags";
 
-export const dynamic = "force-dynamic";
+const paramsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+const payloadSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required"),
+});
+
+const normalize = (value: string): string => value.trim();
 
 type RouteContext = {
   params: {
-    id?: string | string[];
+    id: string;
   };
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const resolveId = (context: RouteContext): number | null => {
+  const parsed = paramsSchema.safeParse(context.params);
 
-const serializeTag = (tag: TagRecord) => ({
-  id: tag.id,
-  name: tag.name,
-  slug: tag.slug,
-  postCount: tag.postCount,
-  createdAt: tag.createdAt ? tag.createdAt.toISOString() : null,
-  updatedAt: tag.updatedAt ? tag.updatedAt.toISOString() : null,
-});
-
-const parseId = (value: string | string[] | undefined): number | null => {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-
-  if (!rawValue) {
+  if (!parsed.success) {
     return null;
   }
 
-  const parsed = Number.parseInt(rawValue, 10);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
-
-  return parsed;
+  return parsed.data.id;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: NextRequest, context: RouteContext) {
   const session = await auth();
 
   if (!session?.user) {
-    return unauthorized();
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tagId = parseId(context.params.id);
+  const id = resolveId(context);
 
-  if (!tagId) {
-    return NextResponse.json({ error: "标签 ID 无效" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Invalid tag id" }, { status: 400 });
+  }
+
+  const tag = await getTagById(id);
+
+  if (!tag) {
+    return NextResponse.json({ error: "Tag not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ data: tag });
+}
+
+export async function PUT(request: NextRequest, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const id = resolveId(context);
+
+  if (!id) {
+    return NextResponse.json({ error: "Invalid tag id" }, { status: 400 });
+  }
+
+  const json = await request.json();
+  const parsed = payloadSchema.safeParse(json);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      },
+      { status: 400 },
+    );
   }
 
   try {
-    const tag = await getTagById(tagId);
+    const tag = await updateTag(id, {
+      name: normalize(parsed.data.name),
+      slug: normalize(parsed.data.slug),
+    });
 
-    if (!tag) {
-      return NextResponse.json({ error: "未找到标签" }, { status: 404 });
+    return NextResponse.json({ data: tag });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+
+    if (code === "ER_DUP_ENTRY") {
+      return NextResponse.json({ error: "Slug must be unique" }, { status: 409 });
     }
 
-    return NextResponse.json({ tag: serializeTag(tag) });
-  } catch (error) {
-    console.error("Failed to load tag", { tagId, error });
-    return NextResponse.json({ error: "获取标签失败" }, { status: 500 });
+    console.error("Failed to update tag", error);
+    return NextResponse.json({ error: "Failed to update tag" }, { status: 500 });
   }
 }
 
-export async function PUT(request: Request, context: RouteContext) {
+export async function DELETE(_request: NextRequest, context: RouteContext) {
   const session = await auth();
 
   if (!session?.user) {
-    return unauthorized();
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tagId = parseId(context.params.id);
+  const id = resolveId(context);
 
-  if (!tagId) {
-    return NextResponse.json({ error: "标签 ID 无效" }, { status: 400 });
-  }
-
-  let payload: unknown;
-
-  try {
-    payload = await request.json();
-  } catch (error) {
-    console.warn("Failed to parse PUT body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
-  }
-
-  const rawName = (payload as { name?: unknown })?.name;
-  const name = normalizeTagName(rawName ?? "");
-
-  if (!name) {
-    return NextResponse.json({ error: "标签名称不能为空" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Invalid tag id" }, { status: 400 });
   }
 
   try {
-    if (await isTagNameTaken(name, tagId)) {
-      return NextResponse.json({ error: "标签名称已存在" }, { status: 400 });
-    }
-
-    const tag = await updateTag(tagId, { name });
-
-    if (!tag) {
-      return NextResponse.json({ error: "未找到标签" }, { status: 404 });
-    }
-
-    return NextResponse.json({ tag: serializeTag(tag) });
-  } catch (error) {
-    console.error("Failed to update tag", { tagId, error });
-
-    if (error instanceof Error && error.message.includes("already exists")) {
-      return NextResponse.json({ error: "标签名称已存在" }, { status: 400 });
-    }
-
-    return NextResponse.json({ error: "更新标签失败" }, { status: 500 });
-  }
-}
-
-export async function DELETE(_request: Request, context: RouteContext) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return unauthorized();
-  }
-
-  const tagId = parseId(context.params.id);
-
-  if (!tagId) {
-    return NextResponse.json({ error: "标签 ID 无效" }, { status: 400 });
-  }
-
-  try {
-    const deleted = await deleteTag(tagId);
+    const deleted = await deleteTag(id);
 
     if (!deleted) {
-      return NextResponse.json({ error: "未找到标签" }, { status: 404 });
+      return NextResponse.json({ error: "Tag not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true });
+    return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("Failed to delete tag", { tagId, error });
-    return NextResponse.json({ error: "删除标签失败" }, { status: 500 });
+    console.error("Failed to delete tag", error);
+    return NextResponse.json({ error: "Failed to delete tag" }, { status: 500 });
   }
 }
