@@ -1,3 +1,7 @@
+import { buildPostPath, ensureLeadingSlash } from "./paths";
+
+export { buildPostPath } from "./paths";
+
 const FALLBACK_SITE_ORIGIN = "https://modern-blog.example.com";
 const FALLBACK_SITE_NAME = "Modern Blog";
 const FALLBACK_SITE_DESCRIPTION = "Insights and stories from Modern Blog.";
@@ -13,8 +17,6 @@ const ensureProtocol = (value: string): string => {
 
   return `https://${value}`;
 };
-
-const ensureLeadingSlash = (value: string): string => (value.startsWith("/") ? value : `/${value}`);
 
 const stripTrailingSlash = (value: string): string => value.replace(/\/+$/, "");
 
@@ -87,22 +89,6 @@ export const buildSiteUrl = (path: string): string => {
   const base = stripTrailingSlash(baseUrl.toString());
 
   return `${base}${normalizedPath}`;
-};
-
-export const buildPostPath = (slug: string): string => {
-  const normalizedSlug = slug.trim();
-
-  if (!normalizedSlug) {
-    return "/";
-  }
-
-  const withoutLeadingSlash = normalizedSlug.replace(/^\/+/, "");
-
-  if (!withoutLeadingSlash) {
-    return "/";
-  }
-
-  return ensureLeadingSlash(withoutLeadingSlash);
 };
 
 export const buildPostUrl = (slug: string): string => buildSiteUrl(buildPostPath(slug));

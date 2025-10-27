@@ -5,8 +5,8 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
+import { buildPostPath } from "@/lib/paths";
 import {
-  buildPostPath,
   buildPostUrl,
   createAbsoluteUrl,
   ensureAbsoluteUrl,

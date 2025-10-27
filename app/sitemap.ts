@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 
 import { getPublishedPosts, getPublishedTags } from "@/lib/posts";
-import { buildPostPath, createAbsoluteUrl } from "@/lib/site";
+import { buildPostPath } from "@/lib/paths";
+import { createAbsoluteUrl } from "@/lib/site";
 
 export const revalidate = 3600;
 

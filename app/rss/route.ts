@@ -1,5 +1,6 @@
 import { getPublishedPosts } from "@/lib/posts";
-import { buildPostPath, createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
+import { buildPostPath } from "@/lib/paths";
+import { createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
 
 const RSS_ITEM_LIMIT = 20;
 
