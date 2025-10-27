@@ -6,7 +6,7 @@ import { cache } from "react";
 
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import {
-  createAbsoluteUrl,
+  buildPostUrl,
   ensureAbsoluteUrl,
   getOgImageFallback,
   getSiteDescription,
@@ -47,7 +47,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
     truncateWords(plainTextContent, 40) ||
     fallbackDescription;
 
-  const canonicalUrl = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/${post.slug}`);
+  const canonicalHref = buildPostUrl(post.slug);
+  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? canonicalHref;
   const coverImage = ensureAbsoluteUrl(post.coverImageUrl) ?? getOgImageFallback();
 
   return {
@@ -103,7 +104,8 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  const canonicalUrl = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/${post.slug}`);
+  const canonicalHref = buildPostUrl(post.slug);
+  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? canonicalHref;
   const coverImage = ensureAbsoluteUrl(post.coverImageUrl);
   const ogImage = coverImage ?? getOgImageFallback();
   const publishedLabel = formatDate(post.publishedAt);

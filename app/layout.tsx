@@ -4,6 +4,8 @@ import { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import {
+  buildSiteUrl,
+  ensureAbsoluteUrl,
   getMetadataBase,
   getOgImageFallback,
   getSiteDescription,
@@ -13,8 +15,9 @@ import {
 const siteName = getSiteName();
 const siteDescription = getSiteDescription();
 const metadataBase = getMetadataBase();
-const siteOrigin = metadataBase.origin;
 const defaultOgImage = getOgImageFallback();
+const siteCanonicalHref = buildSiteUrl("/");
+const siteCanonicalUrl = ensureAbsoluteUrl(siteCanonicalHref) ?? siteCanonicalHref;
 
 export const metadata: Metadata = {
   metadataBase,
@@ -28,7 +31,7 @@ export const metadata: Metadata = {
     title: siteName,
     description: siteDescription,
     siteName,
-    url: siteOrigin,
+    url: siteCanonicalUrl,
     images: [
       {
         url: defaultOgImage,
@@ -45,7 +48,7 @@ export const metadata: Metadata = {
     images: [defaultOgImage],
   },
   alternates: {
-    canonical: siteOrigin,
+    canonical: siteCanonicalUrl,
   },
 };
 

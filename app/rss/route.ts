@@ -1,5 +1,6 @@
 import { getPublishedPosts } from "@/lib/posts";
 import {
+  buildPostUrl,
   createAbsoluteUrl,
   ensureAbsoluteUrl,
   getSiteDescription,
@@ -43,7 +44,8 @@ export async function GET() {
 
   const items = posts
     .map((post) => {
-      const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/${post.slug}`);
+      const permalink = buildPostUrl(post.slug);
+      const link = ensureAbsoluteUrl(permalink) ?? permalink;
       const summaryText = post.summary?.trim() ?? "";
       const summaryHtml = summaryText
         ? `<p>${escapeXml(summaryText)}</p>`
