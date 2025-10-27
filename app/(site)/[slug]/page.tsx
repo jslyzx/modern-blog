@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
@@ -15,7 +15,9 @@ import {
 import {
   getPublishedPostBySlug,
   getPublishedPostSlugs,
+  type PublishedPost,
 } from "@/lib/posts";
+import { isNormalizedSlug, toPinyinSlug } from "@/lib/slug";
 
 type PostPageProps = {
   params: {
@@ -23,7 +25,83 @@ type PostPageProps = {
   };
 };
 
-const fetchPost = cache(async (slug: string) => getPublishedPostBySlug(slug));
+const ensureLeadingSlash = (value: string): string => (value.startsWith("/") ? value : `/${value}`);
+
+const decodeSlugValue = (value: string): string | null => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+type ResolvedPostResult = {
+  post: PublishedPost | null;
+  redirectSlug: string | null;
+};
+
+const resolvePost = cache(async (rawSlug: string): Promise<ResolvedPostResult> => {
+  const directPost = await getPublishedPostBySlug(rawSlug);
+
+  if (directPost) {
+    const needsRedirect = directPost.slug !== rawSlug && directPost.slug.trim().length > 0;
+
+    return {
+      post: directPost,
+      redirectSlug: needsRedirect ? directPost.slug : null,
+    };
+  }
+
+  const decodedSlug = decodeSlugValue(rawSlug);
+
+  if (!decodedSlug) {
+    return { post: null, redirectSlug: null };
+  }
+
+  const normalizedDecoded = decodedSlug.trim();
+
+  if (!normalizedDecoded) {
+    return { post: null, redirectSlug: null };
+  }
+
+  if (decodedSlug === rawSlug && isNormalizedSlug(rawSlug)) {
+    return { post: null, redirectSlug: null };
+  }
+
+  const candidateSlug = toPinyinSlug(decodedSlug);
+
+  if (!candidateSlug || candidateSlug === rawSlug) {
+    return { post: null, redirectSlug: null };
+  }
+
+  const fallbackPost = await getPublishedPostBySlug(candidateSlug);
+
+  if (!fallbackPost) {
+    return { post: null, redirectSlug: null };
+  }
+
+  const needsRedirect = fallbackPost.slug !== rawSlug;
+
+  return {
+    post: fallbackPost,
+    redirectSlug: needsRedirect ? fallbackPost.slug : null,
+  };
+});
+
+const loadPostOrRedirect = async (slug: string): Promise<PublishedPost> => {
+  const { post, redirectSlug } = await resolvePost(slug);
+
+  if (redirectSlug) {
+    const target = ensureLeadingSlash(redirectSlug);
+    permanentRedirect(target);
+  }
+
+  if (!post) {
+    notFound();
+  }
+
+  return post;
+};
 
 export async function generateStaticParams() {
   const slugs = await getPublishedPostSlugs();
@@ -32,11 +110,7 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
-  const post = await fetchPost(params.slug);
-
-  if (!post) {
-    notFound();
-  }
+  const post = await loadPostOrRedirect(params.slug);
 
   const siteName = getSiteName();
   const fallbackDescription = getSiteDescription();
@@ -97,11 +171,7 @@ const formatDate = (date: Date | null): string | null => {
 };
 
 export default async function PostPage({ params }: PostPageProps) {
-  const post = await fetchPost(params.slug);
-
-  if (!post) {
-    notFound();
-  }
+  const post = await loadPostOrRedirect(params.slug);
 
   const canonicalHref = buildPostUrl(post.slug);
   const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? canonicalHref;

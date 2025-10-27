@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { generateSlug } from "@/lib/slug";
+import { generateSlug, isNormalizedSlug, toPinyinSlug } from "@/lib/slug";
 
 describe("generateSlug", () => {
   it("converts Chinese characters to pinyin", () => {
@@ -21,5 +21,33 @@ describe("generateSlug", () => {
 
   it("generates a fallback slug when input is empty", () => {
     expect(generateSlug("")).toMatch(/^post-[a-z0-9]{6}$/);
+  });
+});
+
+describe("toPinyinSlug", () => {
+  it("normalizes mixed input to a slug", () => {
+    expect(toPinyinSlug("Hello 世界")).toBe("hello-shi-jie");
+  });
+
+  it("returns empty string for blank input", () => {
+    expect(toPinyinSlug("   ")).toBe("");
+  });
+});
+
+describe("isNormalizedSlug", () => {
+  it("returns true for lowercase latin slugs", () => {
+    expect(isNormalizedSlug("hello-world-123")).toBe(true);
+  });
+
+  it("returns false for slugs with uppercase characters", () => {
+    expect(isNormalizedSlug("Hello-World")).toBe(false);
+  });
+
+  it("returns false for non-latin characters", () => {
+    expect(isNormalizedSlug("第一篇文章")).toBe(false);
+  });
+
+  it("returns false for slugs with extra separators", () => {
+    expect(isNormalizedSlug("hello--world")).toBe(false);
   });
 });
