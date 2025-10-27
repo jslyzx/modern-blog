@@ -1,15 +1,16 @@
 import type { RowDataPacket } from "mysql2";
 
 import { query } from "@/lib/db";
+import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 
 const PUBLISHED_POST_CONDITION = "p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
+const META_DESCRIPTION_WORD_LIMIT = 40;
 
 interface PostRow extends RowDataPacket {
   id: number;
   slug: string;
   title: string;
   summary: string | null;
-  metaDescription: string | null;
   coverImageUrl: string | null;
   canonicalUrl: string | null;
   contentHtml: string | null;
@@ -38,7 +39,7 @@ export interface PublishedPostSummary {
   slug: string;
   title: string;
   summary: string | null;
-  metaDescription: string | null;
+  metaDescription?: string | null;
   coverImageUrl: string | null;
   canonicalUrl: string | null;
   contentHtml: string;
@@ -70,20 +71,51 @@ const toDate = (value: Date | string | null): Date | null => {
   return parsed;
 };
 
-const mapPostRow = (row: PostRow): PublishedPostSummary => ({
-  id: row.id,
-  slug: row.slug,
-  title: row.title,
-  summary: row.summary ?? null,
-  metaDescription: row.metaDescription ?? null,
-  coverImageUrl: row.coverImageUrl ?? null,
-  canonicalUrl: row.canonicalUrl ?? null,
-  contentHtml: row.contentHtml ?? "",
-  publishedAt: toDate(row.publishedAt),
-  updatedAt: toDate(row.updatedAt),
-  createdAt: toDate(row.createdAt),
-  isFeatured: Boolean(row.isFeatured),
-});
+const normalizeNullableText = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed ? trimmed : null;
+};
+
+const deriveMetaDescription = (summary: string | null, contentHtml: string): string | null => {
+  if (summary) {
+    return summary;
+  }
+
+  if (!contentHtml) {
+    return null;
+  }
+
+  const plainText = htmlToPlainText(contentHtml);
+  const truncated = truncateWords(plainText, META_DESCRIPTION_WORD_LIMIT).trim();
+
+  return truncated ? truncated : null;
+};
+
+const mapPostRow = (row: PostRow): PublishedPostSummary => {
+  const summary = normalizeNullableText(row.summary);
+  const contentHtml = row.contentHtml ?? "";
+  const metaDescription = deriveMetaDescription(summary, contentHtml);
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary,
+    metaDescription,
+    coverImageUrl: row.coverImageUrl ?? null,
+    canonicalUrl: row.canonicalUrl ?? null,
+    contentHtml,
+    publishedAt: toDate(row.publishedAt),
+    updatedAt: toDate(row.updatedAt),
+    createdAt: toDate(row.createdAt),
+    isFeatured: Boolean(row.isFeatured),
+  };
+};
 
 const POSTS_SELECT = `
   SELECT
@@ -91,7 +123,6 @@ const POSTS_SELECT = `
     p.slug,
     p.title,
     p.summary AS summary,
-    p.meta_description AS metaDescription,
     p.cover_image_url AS coverImageUrl,
     p.canonical_url AS canonicalUrl,
     p.content_html AS contentHtml,
