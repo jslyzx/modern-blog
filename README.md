@@ -144,30 +144,40 @@ Session cookies are managed automatically by NextAuth and scoped to HTTPS in pro
    BLOG_DB_NAME=modern_blog
    BLOG_DB_SSL=false
    EOF
+   ```
 
 2. Build and tag the image locally or in a CI pipeline:
    ```bash
    docker build -t modern-blog-admin:latest .
    ```
-3. Review and update `docker-compose.yml` with your domain, database credentials, and SSL/TLS preferences. The compose file mounts `./public/uploads` into the container so media remains on the host disk or attached OSS bucket.
-4. Launch the stack:
+
+3. Test the image on the ECS host (or your workstation) before wiring up Nginx:
+   ```bash
+   docker run --rm -it \
+     --env-file .env.production \
+     -p 3000:3000 \
+     -v "$(pwd)/public/uploads:/app/public/uploads" \
+     modern-blog-admin:latest
+   ```
+   Visit [http://localhost:3000/admin/login](http://localhost:3000/admin/login) to confirm the application is healthy, then press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop the container.
+
+4. Deploy with Docker Compose in detached mode (adjust `docker-compose.yml` if you need to change image tags, port bindings, or database hostnames):
    ```bash
    docker compose --env-file .env.production up -d --build
    ```
-   The application will be available on port `3000` inside the container. Use the Nginx configuration below to expose it on port 80 (add a TLS-enabled server block when you are ready for HTTPS).
+   The compose file mounts `./public/uploads` so uploads persist across releases, and the `env_file` directive injects `SITE_BASE_URL` and database credentials without hard-coding them. The application will be available on port `3000` inside the container—use the Nginx configuration below to expose it on port 80 (add a TLS-enabled server block when you are ready for HTTPS).
 
 ### Nginx reverse proxy
 
-- Place the sample configuration from `deploy/nginx.conf` under `/etc/nginx/conf.d/modern-blog-admin.conf` (or similar).
-- Ensure the `SITE_BASE_URL` environment variable matches the domain you configure here (include the `http://` prefix when serving over HTTP).
-- Update `server_name` and the upstream address to match your ECS instance or internal load balancer.
-- Reload Nginx:
-  ```bash
-  sudo nginx -t
-  sudo systemctl reload nginx
-  ```
-- The configuration enables gzip compression, sets long-lived cache headers for Next.js static assets, and forwards the appropriate proxy headers required by Next.js and NextAuth.
-- When you are ready to serve traffic over HTTPS, add a separate server block that listens on port 443 with your TLS certificate, or terminate TLS in front of this server (for example, with Alibaba Cloud SLB).
+1. Copy `deploy/nginx.conf` to `/etc/nginx/conf.d/modern-blog-admin.conf` on your ECS instance (or symlink it if you keep the repository checked out on the server). The upstream targets `127.0.0.1:3000`; adjust it if the container runs on another host or network.
+2. Ensure the `/uploads/` alias matches the host path that Docker mounts (`/var/www/modern-blog-admin/public/uploads/` in the sample). Update the path if you store uploads elsewhere and grant Nginx read access.
+3. Set `server_name` and the `SITE_BASE_URL` environment variable to the domain you intend to serve (include the `http://` prefix while running over HTTP).
+4. Validate and reload Nginx:
+   ```bash
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+   The configuration listens on port 80, forwards `X-Forwarded-*` headers, enables gzip compression, caches Next.js `_next` assets, and raises `client_max_body_size` for uploads. When you are ready to enable HTTPS, add a TLS-enabled server block or terminate TLS in an upstream load balancer.
 
 ### Persisting media uploads
 

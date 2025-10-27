@@ -7,10 +7,12 @@ services:
       dockerfile: Dockerfile
     image: modern-blog-admin:latest
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       NODE_ENV: production
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://admin.example.com}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       SITE_BASE_URL: ${SITE_BASE_URL:-http://localhost:3000}
       BLOG_DB_HOST: ${BLOG_DB_HOST:-db}
       BLOG_DB_PORT: ${BLOG_DB_PORT:-3306}
@@ -32,6 +34,8 @@ services:
   db:
     image: mysql:8.0
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${BLOG_DB_NAME:-modern_blog}
