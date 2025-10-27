@@ -11,7 +11,7 @@ export default async function NewPostPage() {
         <p className="text-muted-foreground">使用富文本与公式编辑能力创建一篇新的博客文章。</p>
       </header>
 
-      <PostForm availableTags={tags} />
+      <PostForm initialTags={tags} />
     </section>
   );
 }
