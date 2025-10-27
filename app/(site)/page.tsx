@@ -10,6 +10,7 @@ import {
   type PublishedPostSummary,
   type PublishedTag,
 } from "@/lib/posts";
+import { getSiteConfig } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -56,7 +57,8 @@ export default async function HomePage({ searchParams = {} }: HomePageProps) {
   const page = parsePageParam(searchParams.page);
   const offset = (page - 1) * PAGE_SIZE;
 
-  const [featuredPosts, totalCount] = await Promise.all([
+  const [site, featuredPosts, totalCount] = await Promise.all([
+    getSiteConfig(),
     getFeaturedPublishedPosts(FEATURED_POST_LIMIT),
     getPublishedPostsCount(),
   ]);
@@ -68,6 +70,7 @@ export default async function HomePage({ searchParams = {} }: HomePageProps) {
     excludeIds: Array.from(excludedPostIds),
   });
 
+  const heroSubtitle = site.siteDescription || PAGE_SUBTITLE;
   const combinedPosts = [...featuredPosts, ...posts];
   const uniquePostIds = Array.from(
     new Set(
@@ -109,7 +112,7 @@ export default async function HomePage({ searchParams = {} }: HomePageProps) {
     <main className="container mx-auto max-w-5xl space-y-10 px-4 py-12">
       <header className="space-y-2 text-center md:text-left">
         <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">{PAGE_HEADING}</h1>
-        <p className="text-lg text-muted-foreground">{PAGE_SUBTITLE}</p>
+        <p className="text-lg text-muted-foreground">{heroSubtitle}</p>
       </header>
 
       {featuredCards.length ? (

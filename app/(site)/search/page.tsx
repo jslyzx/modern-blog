@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buildPostPath } from "@/lib/paths";
-import { createAbsoluteUrl } from "@/lib/site";
+import { createAbsoluteUrlFromConfig, getSiteConfig } from "@/lib/site";
 import {
   sanitizeSearchQuery,
   searchPublishedPosts,
@@ -143,6 +143,8 @@ export async function generateMetadata({ searchParams = {} }: SearchPageProps): 
   const title = page > 1 ? `${baseTitle} – Page ${page}` : baseTitle;
   const description = query ? `Browse published posts matching “${query}”.` : "Search published posts by title or summary.";
   const canonicalPath = buildSearchHref(query, page);
+  const site = await getSiteConfig();
+  const canonicalUrl = createAbsoluteUrlFromConfig(site, canonicalPath);
 
   return {
     title,
@@ -152,7 +154,7 @@ export async function generateMetadata({ searchParams = {} }: SearchPageProps): 
       follow: true,
     },
     alternates: {
-      canonical: createAbsoluteUrl(canonicalPath),
+      canonical: canonicalUrl,
     },
   };
 }

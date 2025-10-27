@@ -1,6 +1,6 @@
 import { getPublishedPosts } from "@/lib/posts";
 import { buildPostPath } from "@/lib/paths";
-import { createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
+import { createAbsoluteUrlFromConfig, getSiteConfig } from "@/lib/site";
 
 const RSS_ITEM_LIMIT = 20;
 
@@ -32,14 +32,17 @@ const extractFirstParagraph = (html: string): string => {
 export const revalidate = 3600;
 
 export async function GET() {
-  const posts = await getPublishedPosts({ limit: RSS_ITEM_LIMIT });
-  const siteName = getSiteName();
-  const siteDescription = getSiteDescription();
-  const siteUrl = createAbsoluteUrl("/");
+  const [posts, site] = await Promise.all([
+    getPublishedPosts({ limit: RSS_ITEM_LIMIT }),
+    getSiteConfig(),
+  ]);
+  const siteName = site.siteName;
+  const siteDescription = site.siteDescription;
+  const siteUrl = createAbsoluteUrlFromConfig(site, "/");
 
   const items = posts
     .map((post) => {
-      const link = createAbsoluteUrl(buildPostPath(post.slug));
+      const link = createAbsoluteUrlFromConfig(site, buildPostPath(post.slug));
       const summaryText = post.summary?.trim() ?? "";
       const summaryHtml = summaryText
         ? `<p>${escapeXml(summaryText)}</p>`

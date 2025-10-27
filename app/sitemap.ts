@@ -2,17 +2,19 @@ import type { MetadataRoute } from "next";
 
 import { getPublishedPosts, getPublishedTags } from "@/lib/posts";
 import { buildPostPath } from "@/lib/paths";
-import { createAbsoluteUrl } from "@/lib/site";
+import { createAbsoluteUrlFromConfig, getSiteConfig } from "@/lib/site";
 
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [posts, tags] = await Promise.all([getPublishedPosts(), getPublishedTags()]);
+  const [posts, tags, site] = await Promise.all([getPublishedPosts(), getPublishedTags(), getSiteConfig()]);
   const now = new Date();
+
+  const createUrl = (path: string) => createAbsoluteUrlFromConfig(site, path);
 
   const routes: MetadataRoute.Sitemap = [
     {
-      url: createAbsoluteUrl("/"),
+      url: createUrl("/"),
       lastModified: now,
       changeFrequency: "daily",
       priority: 1,
@@ -20,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   for (const post of posts) {
-    const url = createAbsoluteUrl(buildPostPath(post.slug));
+    const url = createUrl(buildPostPath(post.slug));
 
     routes.push({
       url,
@@ -32,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   for (const tag of tags) {
     routes.push({
-      url: createAbsoluteUrl(`/tags/${tag.slug}`),
+      url: createUrl(`/tags/${tag.slug}`),
       lastModified: tag.updatedAt ?? now,
       changeFrequency: "weekly",
       priority: 0.6,
@@ -40,7 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   routes.push({
-    url: createAbsoluteUrl("/rss"),
+    url: createUrl("/rss"),
     lastModified: now,
     changeFrequency: "hourly",
     priority: 0.5,

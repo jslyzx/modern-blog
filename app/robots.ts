@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
 
-import { createAbsoluteUrl } from "@/lib/site";
+import { createAbsoluteUrlFromConfig, getSiteConfig } from "@/lib/site";
 
-export default function robots(): MetadataRoute.Robots {
-  const rootUrl = createAbsoluteUrl("/");
-  const sitemap = createAbsoluteUrl("/sitemap.xml");
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const site = await getSiteConfig();
+  const rootUrl = createAbsoluteUrlFromConfig(site, "/");
+  const sitemap = createAbsoluteUrlFromConfig(site, "/sitemap.xml");
 
   return {
     rules: {

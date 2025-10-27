@@ -28,6 +28,10 @@ const navItems: NavItem[] = [
     href: "/admin/tags",
     label: "标签管理",
   },
+  {
+    href: "/admin/settings",
+    label: "站点设置",
+  },
 ];
 
 function getInitials(value: string) {
