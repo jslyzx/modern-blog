@@ -11,6 +11,7 @@ services:
       NODE_ENV: production
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-https://admin.example.com}
+      SITE_BASE_URL: ${SITE_BASE_URL:-http://localhost:3000}
       BLOG_DB_HOST: ${BLOG_DB_HOST:-db}
       BLOG_DB_PORT: ${BLOG_DB_PORT:-3306}
       BLOG_DB_USER: ${BLOG_DB_USER:-modern_blog}

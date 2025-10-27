@@ -1,11 +1,5 @@
 import { getPublishedPosts } from "@/lib/posts";
-import {
-  buildPostUrl,
-  createAbsoluteUrl,
-  ensureAbsoluteUrl,
-  getSiteDescription,
-  getSiteName,
-} from "@/lib/site";
+import { createAbsoluteUrl, getSiteDescription, getSiteName } from "@/lib/site";
 
 const RSS_ITEM_LIMIT = 20;
 
@@ -44,8 +38,7 @@ export async function GET() {
 
   const items = posts
     .map((post) => {
-      const permalink = buildPostUrl(post.slug);
-      const link = ensureAbsoluteUrl(permalink) ?? permalink;
+      const link = createAbsoluteUrl(`/${post.slug}`);
       const summaryText = post.summary?.trim() ?? "";
       const summaryHtml = summaryText
         ? `<p>${escapeXml(summaryText)}</p>`
@@ -53,12 +46,13 @@ export async function GET() {
       const cdata = sanitizeCdata(summaryHtml);
       const publishedAt = toRssDate(post.publishedAt);
       const guidSeed = post.updatedAt?.getTime() ?? post.publishedAt?.getTime() ?? post.id;
+      const guidValue = `${link}#${guidSeed}`;
 
       return `
         <item>
           <title>${escapeXml(post.title)}</title>
           <link>${escapeXml(link)}</link>
-          <guid isPermaLink="false">${escapeXml(`${link}#${guidSeed}`)}</guid>
+          <guid isPermaLink="false">${escapeXml(guidValue)}</guid>
           <description><![CDATA[${cdata}]]></description>
           <pubDate>${publishedAt}</pubDate>
         </item>
