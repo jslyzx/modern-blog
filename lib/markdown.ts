@@ -1,6 +1,7 @@
 import katex from "katex";
 import sanitizeHtml, { AllowedAttribute } from "sanitize-html";
 import { unified } from "unified";
+import type { Element, Root, Text } from "hast";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -156,6 +157,149 @@ export const truncateWords = (input: string, limit: number): string => {
   return `${words.slice(0, limit).join(" ")}…`;
 };
 
+const isElementNode = (node: unknown): node is Element =>
+  Boolean(node) && typeof node === "object" && (node as Element).type === "element";
+
+const isTextNode = (node: unknown): node is Text =>
+  Boolean(node) && typeof node === "object" && (node as Text).type === "text";
+
+const slugifyHeadingValue = (value: string): string => {
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  return normalized
+    .replace(/[^\p{Letter}\p{Number}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+};
+
+const extractHeadingText = (node: Element): string => {
+  const parts: string[] = [];
+
+  const visit = (value: unknown): void => {
+    if (isTextNode(value)) {
+      const raw = typeof value.value === "string" ? value.value : String(value.value ?? "");
+      if (raw.trim()) {
+        parts.push(raw.trim());
+      }
+      return;
+    }
+
+    if (isElementNode(value) && Array.isArray(value.children)) {
+      const { ariaHidden, hidden } = value.properties ?? {};
+
+      if (ariaHidden === true || ariaHidden === "true" || hidden === true || hidden === "true") {
+        return;
+      }
+
+      value.children.forEach(visit);
+    }
+  };
+
+  if (Array.isArray(node.children)) {
+    node.children.forEach(visit);
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+};
+
+const headingIdPlugin = () => {
+  return (tree: Root) => {
+    const slugCounts = new Map<string, number>();
+    let anonymousIndex = 0;
+
+    const createUniqueSlug = (base: string): string => {
+      const count = slugCounts.get(base) ?? 0;
+      slugCounts.set(base, count + 1);
+
+      if (count === 0) {
+        return base;
+      }
+
+      return `${base}-${count}`;
+    };
+
+    const ensureSlug = (value: string | null | undefined): string => {
+      if (value && value.trim()) {
+        const slug = slugifyHeadingValue(value);
+        if (slug) {
+          return slug;
+        }
+      }
+      return "";
+    };
+
+    const assignId = (node: Element): void => {
+      const rawId = node.properties?.id;
+      const existing = ensureSlug(
+        Array.isArray(rawId)
+          ? rawId.find((entry) => typeof entry === "string") ?? null
+          : typeof rawId === "string"
+            ? rawId
+            : null,
+      );
+
+      const text = extractHeadingText(node);
+      let baseSlug = existing || ensureSlug(text);
+
+      if (!baseSlug) {
+        anonymousIndex += 1;
+        baseSlug = `section-${anonymousIndex}`;
+      }
+
+      const uniqueSlug = createUniqueSlug(baseSlug);
+
+      node.properties = {
+        ...node.properties,
+        id: uniqueSlug,
+      };
+    };
+
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== "object") {
+        return;
+      }
+
+      if (isElementNode(value)) {
+        if (typeof value.tagName === "string" && /^h[1-6]$/i.test(value.tagName)) {
+          assignId(value);
+        }
+
+        if (Array.isArray(value.children)) {
+          value.children.forEach(visit);
+        }
+
+        return;
+      }
+
+      const children = (value as { children?: unknown[] }).children;
+      if (Array.isArray(children)) {
+        children.forEach(visit);
+      }
+    };
+
+    visit(tree);
+  };
+};
+
+const ensureHeadingIds = async (html: string): Promise<string> => {
+  try {
+    const processor = unified()
+      .use(rehypeParse, { fragment: true })
+      .use(headingIdPlugin)
+      .use(rehypeStringify, { allowDangerousHtml: true });
+
+    const file = await processor.process(html);
+    return String(file);
+  } catch {
+    return html;
+  }
+};
+
 const MATHML_TAGS = [
   "math",
   "annotation",
@@ -217,7 +361,7 @@ const extendAllowedAttributes = (tag: string, attributes: Array<string | RegExp>
   allowedAttributes[tag] = Array.from(new Set([...existing, ...attributes])) as AllowedAttribute[];
 };
 
-extendAllowedAttributes("*", ["class", "aria-hidden", "aria-label", "role", "data-*", "lang"]);
+extendAllowedAttributes("*", ["id", "class", "aria-hidden", "aria-label", "role", "data-*", "lang"]);
 extendAllowedAttributes("a", ["href", "name", "target", "rel", "title", "class"]);
 extendAllowedAttributes("img", ["src", "alt", "title", "width", "height", "loading", "decoding", "srcset", "sizes", "class"]);
 extendAllowedAttributes("code", ["class"]);
@@ -284,6 +428,7 @@ const createMarkdownProcessor = () =>
       theme: "github-dark",
       keepBackground: false,
     })
+    .use(headingIdPlugin)
     .use(rehypeStringify, { allowDangerousHtml: true });
 
 const createHtmlProcessor = () =>
@@ -294,6 +439,7 @@ const createHtmlProcessor = () =>
       theme: "github-dark",
       keepBackground: false,
     })
+    .use(headingIdPlugin)
     .use(rehypeStringify);
 
 const createKatexHtml = (expression: string, displayMode: boolean): string => {
@@ -393,7 +539,8 @@ export const renderPostContent = async (content: string): Promise<string> => {
         ? content
         : markdownToHtml(trimmedContent);
       const withKatex = renderMathInHtml(fallbackSource);
-      return sanitizeAndTrim(withKatex);
+      const withIds = await ensureHeadingIds(withKatex);
+      return sanitizeAndTrim(withIds);
     }
   }
 };

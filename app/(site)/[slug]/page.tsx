@@ -4,7 +4,9 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
+import { TableOfContents } from "@/components/site/TableOfContents";
 import { htmlToPlainText, renderPostContent, truncateWords } from "@/lib/markdown";
+import { countTocItems, generateToc } from "@/lib/toc";
 import { buildPostPath } from "@/lib/paths";
 import {
   buildPostUrl,
@@ -197,6 +199,8 @@ export default async function PostPage({ params }: PostPageProps) {
 
   const postContent = getPostContentSource(post);
   const html = await renderPostContent(postContent);
+  const tocItems = generateToc(html);
+  const hasTableOfContents = countTocItems(tocItems) >= 3;
   const plainTextContent = htmlToPlainText(html);
   const summary = post.summary?.trim();
   const siteName = getSiteName();
@@ -226,44 +230,48 @@ export default async function PostPage({ params }: PostPageProps) {
   };
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 py-12">
-      <article className="prose prose-neutral mx-auto max-w-none dark:prose-invert prose-pre:overflow-x-auto">
-        <header className="not-prose mb-8 border-b border-border pb-6">
-          <h1 className="text-4xl font-semibold tracking-tight text-foreground">{post.title}</h1>
-          {publishedLabel ? (
-            <div className="mt-2 text-sm text-muted-foreground">
-              <time dateTime={post.publishedAt?.toISOString()}>{publishedLabel}</time>
-              {updatedLabel ? (
-                <span className="ml-1">
-                  (Updated <time dateTime={post.updatedAt?.toISOString()}>{updatedLabel}</time>)
-                </span>
-              ) : null}
-            </div>
+    <main className="container mx-auto max-w-5xl px-4 py-12">
+      <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:gap-12">
+        {hasTableOfContents ? <TableOfContents className="order-1 lg:order-2" items={tocItems} /> : null}
+        <article className="prose prose-neutral max-w-none flex-1 order-2 dark:prose-invert prose-pre:overflow-x-auto lg:order-1 lg:max-w-3xl">
+          <header className="not-prose mb-8 border-b border-border pb-6">
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground">{post.title}</h1>
+            {publishedLabel ? (
+              <div className="mt-2 text-sm text-muted-foreground">
+                <time dateTime={post.publishedAt?.toISOString()}>{publishedLabel}</time>
+                {updatedLabel ? (
+                  <span className="ml-1">
+                    (Updated <time dateTime={post.updatedAt?.toISOString()}>{updatedLabel}</time>)
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            {post.tags.length ? (
+              <ul className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-wide text-primary">
+                {post.tags.map((tag) => (
+                  <li key={tag.id} className="rounded-full bg-primary/10 px-3 py-1">
+                    <Link href={`/tags/${tag.slug}`}>#{tag.name}</Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </header>
+          {coverImage ? (
+            <figure className="not-prose mb-8 overflow-hidden rounded-lg border border-border">
+              <Image
+                src={coverImage}
+                alt={post.title}
+                width={1200}
+                height={630}
+                className="h-auto w-full object-cover"
+                sizes="(min-width: 768px) 768px, 100vw"
+              />
+            </figure>
           ) : null}
-          {post.tags.length ? (
-            <ul className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-wide text-primary">
-              {post.tags.map((tag) => (
-                <li key={tag.id} className="rounded-full bg-primary/10 px-3 py-1">
-                  <Link href={`/tags/${tag.slug}`}>#{tag.name}</Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </header>
-        {coverImage ? (
-          <figure className="not-prose mb-8 overflow-hidden rounded-lg border border-border">
-            <Image
-              src={coverImage}
-              alt={post.title}
-              width={1200}
-              height={630}
-              className="h-auto w-full object-cover"
-              sizes="(min-width: 768px) 768px, 100vw"
-            />
-          </figure>
-        ) : null}
-        <section dangerouslySetInnerHTML={{ __html: html }} />
-      </article>
+          <section dangerouslySetInnerHTML={{ __html: html }} />
+        </article>
+        {hasTableOfContents ? <TableOfContents items={tocItems} /> : null}
+      </div>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData, (_key, value) => value ?? undefined) }}
