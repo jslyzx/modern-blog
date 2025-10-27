@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Remove auto-generated backticks from Tailwind Typography */
+.prose code::before,
+.prose code::after {
+  content: none;
+}
+
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
@@ -185,9 +191,21 @@ input::placeholder {
   padding: 0.125rem 0.25rem;
 }
 
+/* Custom inline code styling */
 .prose :not(pre) > code {
-  background-color: hsl(var(--muted));
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
+  background-color: rgba(135, 131, 120, 0.15);
+  border-radius: 3px;
+  padding: 0.2em 0.4em;
   font-size: 0.875em;
+  font-weight: 400;
+  color: #eb5757;
+}
+
+/* Keep pre > code (code blocks) unstyled by these rules */
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
