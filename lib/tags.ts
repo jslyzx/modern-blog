@@ -84,7 +84,6 @@ const TAG_SELECT_BASE = `
     t.name,
     t.slug,
     t.created_at AS createdAt,
-    t.updated_at AS updatedAt,
     COUNT(pt.post_id) AS postCount
   FROM tags t
   LEFT JOIN post_tags pt ON pt.tag_id = t.id
@@ -280,7 +279,7 @@ export const createTag = async (input: CreateTagInput): Promise<TagRecord> => {
   const slug = await ensureUniqueTagSlug(baseSlug);
 
   const result = await query<ResultSetHeader>(
-    "INSERT INTO tags (name, slug, created_at, updated_at) VALUES (?, ?, NOW(), NOW())",
+    "INSERT INTO tags (name, slug, created_at) VALUES (?, ?, NOW())",
     [name, slug],
   );
 
@@ -325,7 +324,7 @@ export const updateTag = async (id: number, input: UpdateTagInput): Promise<TagR
     slug = await ensureUniqueTagSlug(baseSlug, { excludeId: id });
   }
 
-  await query<ResultSetHeader>("UPDATE tags SET name = ?, slug = ?, updated_at = NOW() WHERE id = ?", [name, slug, id]);
+  await query<ResultSetHeader>("UPDATE tags SET name = ?, slug = ? WHERE id = ?", [name, slug, id]);
 
   const updated = await getTagById(id);
 
