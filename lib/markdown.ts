@@ -372,32 +372,44 @@ export interface RenderPostHtmlInput {
   contentHtml?: string | null;
 }
 
-export const renderPostHtml = async ({ contentMd, contentHtml }: RenderPostHtmlInput): Promise<string> => {
-  const markdown = contentMd?.trim();
+export const renderPostContent = async (content: string): Promise<string> => {
+  const trimmedContent = content.trim();
 
-  if (markdown) {
-    try {
-      const processor = createMarkdownProcessor();
-      const file = await processor.process(markdown);
-      return sanitizeAndTrim(String(file));
-    } catch {
-      const fallbackHtml = markdownToHtml(markdown);
-      return sanitizeAndTrim(fallbackHtml);
-    }
-  }
-
-  const htmlSource = contentHtml ?? "";
-
-  if (!htmlSource.trim()) {
+  if (!trimmedContent) {
     return "";
   }
 
   try {
-    const processor = createHtmlProcessor();
-    const file = await processor.process(htmlSource);
+    const processor = createMarkdownProcessor();
+    const file = await processor.process(content);
     return sanitizeAndTrim(String(file));
   } catch {
-    const withKatex = renderMathInHtml(htmlSource);
-    return sanitizeAndTrim(withKatex);
+    try {
+      const processor = createHtmlProcessor();
+      const file = await processor.process(content);
+      return sanitizeAndTrim(String(file));
+    } catch {
+      const fallbackSource = trimmedContent.includes("<")
+        ? content
+        : markdownToHtml(trimmedContent);
+      const withKatex = renderMathInHtml(fallbackSource);
+      return sanitizeAndTrim(withKatex);
+    }
   }
+};
+
+export const renderPostHtml = async ({ contentMd, contentHtml }: RenderPostHtmlInput): Promise<string> => {
+  const markdownSource = contentMd?.trim();
+
+  if (markdownSource) {
+    return renderPostContent(markdownSource);
+  }
+
+  const htmlSource = contentHtml?.trim();
+
+  if (htmlSource) {
+    return renderPostContent(htmlSource);
+  }
+
+  return "";
 };
