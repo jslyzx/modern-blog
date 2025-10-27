@@ -217,12 +217,15 @@ type AdminPostDetailRow = RowDataPacket & {
   content_html: string | null;
   cover_image_url: string | null;
   status: string | null;
-  is_featured: number;
-  allow_comments: number;
+  is_featured: number | null;
+  allow_comments: number | null;
   created_at: Date | string;
   updated_at: Date | string | null;
   published_at: Date | string | null;
   author_id: number | null;
+  tag_id: number | null;
+  tag_name: string | null;
+  tag_slug: string | null;
 };
 
 type TagRow = RowDataPacket & {
@@ -244,27 +247,32 @@ export interface AdminPostDetail {
   updatedAt: string | null;
   publishedAt: string | null;
   authorId: number | null;
-  tags: Array<{ id: number; name: string }>;
+  tags: Array<{ id: number; name: string; slug: string }>;
 }
 
 export async function getPostById(id: number): Promise<AdminPostDetail | null> {
   const rows = await query<AdminPostDetailRow[]>(
     `SELECT
-      id,
-      slug,
-      title,
-      summary,
-      content_html,
-      cover_image_url,
-      status,
-      is_featured,
-      allow_comments,
-      created_at,
-      updated_at,
-      published_at,
-      author_id
-    FROM posts
-    WHERE id = ?`,
+      p.id,
+      p.slug,
+      p.title,
+      p.summary,
+      p.content_html,
+      p.cover_image_url,
+      p.status,
+      p.is_featured,
+      p.allow_comments,
+      p.created_at,
+      p.updated_at,
+      p.published_at,
+      p.author_id,
+      t.id AS tag_id,
+      t.name AS tag_name,
+      t.slug AS tag_slug
+    FROM posts p
+    LEFT JOIN post_tags pt ON pt.post_id = p.id
+    LEFT JOIN tags t ON t.id = pt.tag_id
+    WHERE p.id = ?`,
     [id],
   );
 
@@ -272,31 +280,37 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
     return null;
   }
 
-  const row = rows[0];
+  const baseRow = rows[0];
 
-  const tagRows = await query<TagRow[]>(
-    `SELECT t.id, t.name
-     FROM tags t
-     INNER JOIN post_tags pt ON pt.tag_id = t.id
-     WHERE pt.post_id = ?`,
-    [id],
-  );
+  const tagsMap = new Map<number, { id: number; name: string; slug: string }>();
+
+  for (const row of rows) {
+    if (typeof row.tag_id === "number" && row.tag_id > 0 && typeof row.tag_name === "string") {
+      if (!tagsMap.has(row.tag_id)) {
+        tagsMap.set(row.tag_id, {
+          id: row.tag_id,
+          name: row.tag_name,
+          slug: row.tag_slug ?? "",
+        });
+      }
+    }
+  }
 
   return {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    summary: row.summary ?? "",
-    contentHtml: row.content_html ?? "",
-    coverImageUrl: row.cover_image_url ?? "",
-    status: isPostStatus(row.status) ? row.status : "draft",
-    isFeatured: Boolean(row.is_featured),
-    allowComments: Boolean(row.allow_comments),
-    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
-    updatedAt: toIsoString(row.updated_at),
-    publishedAt: toIsoString(row.published_at),
-    authorId: row.author_id,
-    tags: tagRows.map((tag) => ({ id: tag.id, name: tag.name })),
+    id: baseRow.id,
+    slug: baseRow.slug,
+    title: baseRow.title,
+    summary: baseRow.summary ?? "",
+    contentHtml: baseRow.content_html ?? "",
+    coverImageUrl: baseRow.cover_image_url ?? "",
+    status: isPostStatus(baseRow.status) ? baseRow.status : "draft",
+    isFeatured: baseRow.is_featured === null ? false : Boolean(baseRow.is_featured),
+    allowComments: baseRow.allow_comments === null ? true : Boolean(baseRow.allow_comments),
+    createdAt: toIsoString(baseRow.created_at) ?? new Date().toISOString(),
+    updatedAt: toIsoString(baseRow.updated_at),
+    publishedAt: toIsoString(baseRow.published_at),
+    authorId: baseRow.author_id,
+    tags: Array.from(tagsMap.values()),
   };
 }
 

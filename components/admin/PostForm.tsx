@@ -280,7 +280,7 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
         <PostEditor
           key={editorInstanceKey}
           editorKey={editorInstanceKey}
-          contentHtml={formData.contentHtml}
+          content={formData.contentHtml}
           onChange={(content) => setFormData((prev) => (prev ? { ...prev, contentHtml: content } : prev))}
         />
       </div>
