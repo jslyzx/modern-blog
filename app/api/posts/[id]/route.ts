@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
   deletePostById,
+  ensureUniquePostSlug,
   isPostStatus,
   type PostStatus,
   updatePost,
   updatePostStatus,
 } from "@/lib/admin/posts";
+import { generateSlug } from "@/lib/slug";
 
 type RouteContext = {
   params: {
@@ -133,13 +135,17 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
+    const requestedSlug = typeof data.slug === "string" ? data.slug : "";
+    const slugCandidate = requestedSlug.trim() ? generateSlug(requestedSlug) : generateSlug(data.title);
+    const slug = await ensureUniquePostSlug(slugCandidate, { excludeId: postId });
+
     const contentHtml = typeof data.contentHtml === "string" ? data.contentHtml : typeof data.content === "string" ? data.content : "";
     const isFeatured = typeof data.isFeatured === "boolean" ? data.isFeatured : Boolean(data.featured);
     const allowComments = Boolean(data.allowComments ?? true);
 
     const updated = await updatePost(postId, {
       title: data.title,
-      slug: data.slug || data.title.toLowerCase().replace(/\s+/g, "-"),
+      slug,
       summary: typeof data.summary === "string" ? data.summary : "",
       contentHtml,
       coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : "",
