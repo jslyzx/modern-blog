@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
-import { markdownToHtml, markdownToPlainText, truncateWords } from "@/lib/markdown";
+import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import {
   createAbsoluteUrl,
   ensureAbsoluteUrl,
@@ -40,10 +40,11 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 
   const siteName = getSiteName();
   const fallbackDescription = getSiteDescription();
+  const plainTextContent = htmlToPlainText(post.contentHtml);
   const description =
     post.metaDescription ??
     post.summary ??
-    truncateWords(markdownToPlainText(post.content), 40) ||
+    truncateWords(plainTextContent, 40) ||
     fallbackDescription;
 
   const canonicalUrl = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/posts/${post.slug}`);
@@ -111,7 +112,8 @@ export default async function PostPage({ params }: PostPageProps) {
       ? formatDate(post.updatedAt)
       : null;
 
-  const html = markdownToHtml(post.content);
+  const plainTextContent = htmlToPlainText(post.contentHtml);
+  const html = post.contentHtml;
   const siteName = getSiteName();
   const structuredData = {
     "@context": "https://schema.org",
@@ -120,7 +122,7 @@ export default async function PostPage({ params }: PostPageProps) {
     description:
       post.metaDescription ??
       post.summary ??
-      truncateWords(markdownToPlainText(post.content), 40) ||
+      truncateWords(plainTextContent, 40) ||
       getSiteDescription(),
     datePublished: post.publishedAt?.toISOString(),
     dateModified: (post.updatedAt ?? post.publishedAt)?.toISOString(),

@@ -12,7 +12,7 @@ interface PostRow extends RowDataPacket {
   metaDescription: string | null;
   coverImageUrl: string | null;
   canonicalUrl: string | null;
-  content: string;
+  contentHtml: string | null;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
 }
@@ -39,7 +39,7 @@ export interface PublishedPostSummary {
   metaDescription: string | null;
   coverImageUrl: string | null;
   canonicalUrl: string | null;
-  content: string;
+  contentHtml: string;
   publishedAt: Date | null;
   updatedAt: Date | null;
 }
@@ -74,7 +74,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => ({
   metaDescription: row.metaDescription ?? null,
   coverImageUrl: row.coverImageUrl ?? null,
   canonicalUrl: row.canonicalUrl ?? null,
-  content: row.content,
+  contentHtml: row.contentHtml ?? "",
   publishedAt: toDate(row.publishedAt),
   updatedAt: toDate(row.updatedAt),
 });
@@ -88,7 +88,7 @@ const POSTS_SELECT = `
     p.meta_description AS metaDescription,
     p.cover_image_url AS coverImageUrl,
     p.canonical_url AS canonicalUrl,
-    p.content,
+    p.content_html AS contentHtml,
     p.published_at AS publishedAt,
     p.updated_at AS updatedAt
   FROM posts p

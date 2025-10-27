@@ -35,10 +35,10 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
           title: post.title,
           slug: post.slug,
           summary: post.summary,
-          content: post.content,
+          contentHtml: post.contentHtml,
           coverImageUrl: post.coverImageUrl,
           status: post.status,
-          featured: post.featured,
+          isFeatured: post.isFeatured,
           allowComments: post.allowComments,
           tags: post.tags.map((t) => t.id),
         }}

@@ -20,10 +20,10 @@ interface PostFormData {
   title: string;
   slug: string;
   summary: string;
-  content: string;
+  contentHtml: string;
   coverImageUrl: string;
   status: "draft" | "published" | "archived";
-  featured: boolean;
+  isFeatured: boolean;
   allowComments: boolean;
   tags: number[];
 }
@@ -52,10 +52,10 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       title: "",
       slug: "",
       summary: "",
-      content: "",
+      contentHtml: "",
       coverImageUrl: "",
       status: "draft",
-      featured: false,
+      isFeatured: false,
       allowComments: true,
       tags: [],
     },
@@ -184,8 +184,8 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
       <div className="space-y-2">
         <Label htmlFor="content">内容 *</Label>
         <PostEditor
-          content={formData.content}
-          onChange={(content) => setFormData((prev) => ({ ...prev, content }))}
+          content={formData.contentHtml}
+          onChange={(content) => setFormData((prev) => ({ ...prev, contentHtml: content }))}
         />
       </div>
 
@@ -234,11 +234,11 @@ export function PostForm({ initialData, postId, availableTags }: PostFormProps) 
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label htmlFor="featured">推荐</Label>
+            <Label htmlFor="isFeatured">推荐</Label>
             <Switch
-              id="featured"
-              checked={formData.featured}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, featured: checked }))}
+              id="isFeatured"
+              checked={formData.isFeatured}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isFeatured: checked }))}
               disabled={loading}
             />
           </div>

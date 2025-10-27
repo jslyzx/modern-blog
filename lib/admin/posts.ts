@@ -153,10 +153,10 @@ type AdminPostDetailRow = RowDataPacket & {
   slug: string;
   title: string;
   summary: string | null;
-  content: string;
+  content_html: string | null;
   cover_image_url: string | null;
   status: string | null;
-  featured: number;
+  is_featured: number;
   allow_comments: number;
   created_at: Date | string;
   updated_at: Date | string | null;
@@ -174,10 +174,10 @@ export interface AdminPostDetail {
   slug: string;
   title: string;
   summary: string;
-  content: string;
+  contentHtml: string;
   coverImageUrl: string;
   status: PostStatus;
-  featured: boolean;
+  isFeatured: boolean;
   allowComments: boolean;
   createdAt: string;
   updatedAt: string | null;
@@ -193,10 +193,10 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
       slug,
       title,
       summary,
-      content,
+      content_html,
       cover_image_url,
       status,
-      featured,
+      is_featured,
       allow_comments,
       created_at,
       updated_at,
@@ -226,10 +226,10 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
     slug: row.slug,
     title: row.title,
     summary: row.summary ?? "",
-    content: row.content,
+    contentHtml: row.content_html ?? "",
     coverImageUrl: row.cover_image_url ?? "",
     status: isPostStatus(row.status) ? row.status : "draft",
-    featured: Boolean(row.featured),
+    isFeatured: Boolean(row.is_featured),
     allowComments: Boolean(row.allow_comments),
     createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
     updatedAt: toIsoString(row.updated_at),
@@ -243,42 +243,43 @@ export interface CreatePostInput {
   title: string;
   slug: string;
   summary: string;
-  content: string;
+  contentHtml: string;
   coverImageUrl: string;
   status: PostStatus;
-  featured: boolean;
+  isFeatured: boolean;
   allowComments: boolean;
   authorId: number;
   tags: number[];
 }
 
 export async function createPost(input: CreatePostInput): Promise<number> {
+  const publishedAtExpression = input.status === "published" ? "NOW()" : "NULL";
+
   const result = await query<ResultSetHeader>(
     `INSERT INTO posts (
       title,
       slug,
       summary,
-      content,
+      content_html,
       cover_image_url,
       status,
-      featured,
+      is_featured,
       allow_comments,
       author_id,
       published_at,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${publishedAtExpression}, NOW(), NOW())`,
     [
       input.title,
       input.slug,
       input.summary,
-      input.content,
+      input.contentHtml,
       input.coverImageUrl || null,
       input.status,
-      input.featured ? 1 : 0,
+      input.isFeatured ? 1 : 0,
       input.allowComments ? 1 : 0,
       input.authorId,
-      input.status === "published" ? new Date() : null,
     ],
   );
 
@@ -299,10 +300,10 @@ export interface UpdatePostInput {
   title: string;
   slug: string;
   summary: string;
-  content: string;
+  contentHtml: string;
   coverImageUrl: string;
   status: PostStatus;
-  featured: boolean;
+  isFeatured: boolean;
   allowComments: boolean;
   tags: number[];
 }
@@ -313,10 +314,10 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
       title = ?,
       slug = ?,
       summary = ?,
-      content = ?,
+      content_html = ?,
       cover_image_url = ?,
       status = ?,
-      featured = ?,
+      is_featured = ?,
       allow_comments = ?,
       updated_at = NOW(),
       published_at = CASE
@@ -329,10 +330,10 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
       input.title,
       input.slug,
       input.summary,
-      input.content,
+      input.contentHtml,
       input.coverImageUrl || null,
       input.status,
-      input.featured ? 1 : 0,
+      input.isFeatured ? 1 : 0,
       input.allowComments ? 1 : 0,
       input.status,
       input.status,
