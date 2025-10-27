@@ -1,10 +1,10 @@
 import type { RowDataPacket } from "mysql2";
 
 import { query } from "@/lib/db";
-import { htmlToPlainText, truncateWords } from "@/lib/markdown";
+import { htmlToPlainText } from "@/lib/markdown";
 
 const PUBLISHED_POST_CONDITION = "p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
-const META_DESCRIPTION_WORD_LIMIT = 40;
+const META_DESCRIPTION_MAX_LENGTH = 160;
 
 interface PostRow extends RowDataPacket {
   id: number;
@@ -12,7 +12,6 @@ interface PostRow extends RowDataPacket {
   title: string;
   summary: string | null;
   coverImageUrl: string | null;
-  canonicalUrl: string | null;
   contentHtml: string | null;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
@@ -39,9 +38,8 @@ export interface PublishedPostSummary {
   slug: string;
   title: string;
   summary: string | null;
-  metaDescription?: string | null;
+  metaDescription: string | null;
   coverImageUrl: string | null;
-  canonicalUrl: string | null;
   contentHtml: string;
   publishedAt: Date | null;
   updatedAt: Date | null;
@@ -81,19 +79,42 @@ const normalizeNullableText = (value: string | null): string | null => {
   return trimmed ? trimmed : null;
 };
 
+const collapseWhitespace = (value: string): string => value.replace(/\s+/g, " ").trim();
+
+const truncateToLength = (value: string, limit: number): string => {
+  if (value.length <= limit) {
+    return value;
+  }
+
+  const slicePoint = Math.max(limit - 1, 0);
+  const truncated = value.slice(0, slicePoint);
+  const lastSpace = truncated.lastIndexOf(" ");
+  const safeSlice =
+    lastSpace > 0 && lastSpace >= slicePoint * 0.6 ? truncated.slice(0, lastSpace) : truncated;
+
+  return `${safeSlice.trimEnd()}…`;
+};
+
 const deriveMetaDescription = (summary: string | null, contentHtml: string): string | null => {
   if (summary) {
-    return summary;
+    const normalizedSummary = collapseWhitespace(summary);
+
+    if (normalizedSummary) {
+      return truncateToLength(normalizedSummary, META_DESCRIPTION_MAX_LENGTH);
+    }
   }
 
   if (!contentHtml) {
     return null;
   }
 
-  const plainText = htmlToPlainText(contentHtml);
-  const truncated = truncateWords(plainText, META_DESCRIPTION_WORD_LIMIT).trim();
+  const plainText = collapseWhitespace(htmlToPlainText(contentHtml));
 
-  return truncated ? truncated : null;
+  if (!plainText) {
+    return null;
+  }
+
+  return truncateToLength(plainText, META_DESCRIPTION_MAX_LENGTH);
 };
 
 const mapPostRow = (row: PostRow): PublishedPostSummary => {
@@ -108,7 +129,6 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
     summary,
     metaDescription,
     coverImageUrl: row.coverImageUrl ?? null,
-    canonicalUrl: row.canonicalUrl ?? null,
     contentHtml,
     publishedAt: toDate(row.publishedAt),
     updatedAt: toDate(row.updatedAt),
@@ -124,7 +144,6 @@ const POSTS_SELECT = `
     p.title,
     p.summary AS summary,
     p.cover_image_url AS coverImageUrl,
-    p.canonical_url AS canonicalUrl,
     p.content_html AS contentHtml,
     p.published_at AS publishedAt,
     p.updated_at AS updatedAt,
