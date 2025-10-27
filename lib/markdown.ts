@@ -7,7 +7,9 @@ import remarkMath from "remark-math";
 import remarkRehype from "remark-rehype";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
+import rehypeParse from "rehype-parse";
 import rehypeStringify from "rehype-stringify";
+import rehypePrettyCode from "rehype-pretty-code";
 
 const CODE_BLOCK_PLACEHOLDER = "@@CODE_BLOCK_";
 
@@ -278,7 +280,21 @@ const createMarkdownProcessor = () =>
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
     .use(rehypeKatex)
+    .use(rehypePrettyCode, {
+      theme: "github-dark",
+      keepBackground: false,
+    })
     .use(rehypeStringify, { allowDangerousHtml: true });
+
+const createHtmlProcessor = () =>
+  unified()
+    .use(rehypeParse, { fragment: true })
+    .use(rehypeKatex)
+    .use(rehypePrettyCode, {
+      theme: "github-dark",
+      keepBackground: false,
+    })
+    .use(rehypeStringify);
 
 const createKatexHtml = (expression: string, displayMode: boolean): string => {
   const trimmed = expression.trim();
@@ -293,7 +309,7 @@ const createKatexHtml = (expression: string, displayMode: boolean): string => {
       throwOnError: false,
       strict: "ignore",
     });
-  } catch (_error) {
+  } catch {
     const safe = escapeHtml(trimmed);
     return displayMode ? `<div class="katex-error">${safe}</div>` : `<span class="katex-error">${safe}</span>`;
   }
@@ -364,7 +380,7 @@ export const renderPostHtml = async ({ contentMd, contentHtml }: RenderPostHtmlI
       const processor = createMarkdownProcessor();
       const file = await processor.process(markdown);
       return sanitizeAndTrim(String(file));
-    } catch (_error) {
+    } catch {
       const fallbackHtml = markdownToHtml(markdown);
       return sanitizeAndTrim(fallbackHtml);
     }
@@ -376,7 +392,12 @@ export const renderPostHtml = async ({ contentMd, contentHtml }: RenderPostHtmlI
     return "";
   }
 
-  const withKatex = renderMathInHtml(htmlSource);
-
-  return sanitizeAndTrim(withKatex);
+  try {
+    const processor = createHtmlProcessor();
+    const file = await processor.process(htmlSource);
+    return sanitizeAndTrim(String(file));
+  } catch {
+    const withKatex = renderMathInHtml(htmlSource);
+    return sanitizeAndTrim(withKatex);
+  }
 };
