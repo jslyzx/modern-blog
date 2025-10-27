@@ -1,5 +1,6 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
+import { randomSlugId } from "@/lib/slug";
 import { query } from "@/lib/db";
 
 export const POST_STATUS_VALUES = ["published", "draft", "archived"] as const;
@@ -80,6 +81,66 @@ const mapRowToAdminPost = (row: AdminPostRow): AdminPost => ({
   authorName: row.author_username ?? null,
   authorEmail: row.author_email ?? null,
 });
+
+type SlugLookupRow = RowDataPacket & {
+  id: number;
+};
+
+export interface UniqueSlugOptions {
+  excludeId?: number;
+}
+
+export async function isPostSlugTaken(slug: string, excludeId?: number): Promise<boolean> {
+  if (!slug) {
+    return false;
+  }
+
+  let sql = "SELECT id FROM posts WHERE slug = ?";
+  const params: Array<string | number> = [slug];
+
+  if (typeof excludeId === "number") {
+    sql += " AND id <> ?";
+    params.push(excludeId);
+  }
+
+  sql += " LIMIT 1";
+
+  const rows = await query<SlugLookupRow[]>(sql, params);
+
+  return rows.length > 0;
+}
+
+const INCREMENTAL_SUFFIX_LIMIT = 10;
+const RANDOM_SUFFIX_ATTEMPTS = 5;
+
+export async function ensureUniquePostSlug(baseSlug: string, options: UniqueSlugOptions = {}): Promise<string> {
+  let slug = baseSlug || `post-${randomSlugId()}`;
+  const { excludeId } = options;
+
+  if (!(await isPostSlugTaken(slug, excludeId))) {
+    return slug;
+  }
+
+  const base = slug;
+
+  for (let increment = 2; increment <= INCREMENTAL_SUFFIX_LIMIT + 1; increment += 1) {
+    const candidate = `${base}-${increment}`;
+
+    if (!(await isPostSlugTaken(candidate, excludeId))) {
+      return candidate;
+    }
+  }
+
+  for (let attempt = 0; attempt < RANDOM_SUFFIX_ATTEMPTS; attempt += 1) {
+    const candidate = `${base}-${randomSlugId()}`;
+
+    if (!(await isPostSlugTaken(candidate, excludeId))) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Unable to generate a unique slug");
+}
 
 export async function getAdminPosts(queryOptions: AdminPostsQuery = {}): Promise<AdminPost[]> {
   const status = queryOptions.status && isPostStatusFilter(queryOptions.status) ? queryOptions.status : DEFAULT_POST_STATUS_FILTER;

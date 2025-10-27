@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
-import { createPost, type PostStatus } from "@/lib/admin/posts";
+import { createPost, ensureUniquePostSlug, type PostStatus } from "@/lib/admin/posts";
+import { generateSlug } from "@/lib/slug";
 
 const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
 
@@ -27,9 +28,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
   }
 
-  const slug = data.slug || data.title.toLowerCase().replace(/\s+/g, "-");
-
   try {
+    const requestedSlug = typeof data.slug === "string" ? data.slug : "";
+    const slugCandidate = requestedSlug.trim() ? generateSlug(requestedSlug) : generateSlug(data.title);
+    const slug = await ensureUniquePostSlug(slugCandidate);
+
     const contentHtml = typeof data.contentHtml === "string" ? data.contentHtml : typeof data.content === "string" ? data.content : "";
     const isFeatured = typeof data.isFeatured === "boolean" ? data.isFeatured : Boolean(data.featured);
     const allowComments = Boolean(data.allowComments ?? true);
