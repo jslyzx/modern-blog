@@ -2,7 +2,7 @@ import type { RowDataPacket } from "mysql2";
 
 import { query } from "@/lib/db";
 
-const PUBLISHED_POST_CONDITION = "p.published_at IS NOT NULL AND p.published_at <= NOW()";
+const PUBLISHED_POST_CONDITION = "p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
 
 interface PostRow extends RowDataPacket {
   id: number;
@@ -15,6 +15,8 @@ interface PostRow extends RowDataPacket {
   contentHtml: string | null;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
+  createdAt: Date | string | null;
+  isFeatured: number | null;
 }
 
 interface TagRow extends RowDataPacket {
@@ -42,6 +44,8 @@ export interface PublishedPostSummary {
   contentHtml: string;
   publishedAt: Date | null;
   updatedAt: Date | null;
+  createdAt: Date | null;
+  isFeatured: boolean;
 }
 
 export interface PublishedPost extends PublishedPostSummary {
@@ -77,6 +81,8 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => ({
   contentHtml: row.contentHtml ?? "",
   publishedAt: toDate(row.publishedAt),
   updatedAt: toDate(row.updatedAt),
+  createdAt: toDate(row.createdAt),
+  isFeatured: Boolean(row.isFeatured),
 });
 
 const POSTS_SELECT = `
@@ -90,14 +96,43 @@ const POSTS_SELECT = `
     p.canonical_url AS canonicalUrl,
     p.content_html AS contentHtml,
     p.published_at AS publishedAt,
-    p.updated_at AS updatedAt
+    p.updated_at AS updatedAt,
+    p.created_at AS createdAt,
+    p.is_featured AS isFeatured
   FROM posts p
   WHERE ${PUBLISHED_POST_CONDITION}
 `;
 
-export const getPublishedPosts = async (limit?: number): Promise<PublishedPostSummary[]> => {
-  const sql = limit ? `${POSTS_SELECT} ORDER BY p.published_at DESC LIMIT ?` : `${POSTS_SELECT} ORDER BY p.published_at DESC`;
-  const params = limit ? [limit] : [];
+export interface GetPublishedPostsOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export const getPublishedPosts = async (
+  options: GetPublishedPostsOptions = {},
+): Promise<PublishedPostSummary[]> => {
+  const { limit, offset } = options;
+
+  const sanitizedLimit =
+    typeof limit === "number" && Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : undefined;
+  const sanitizedOffset =
+    typeof offset === "number" && Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : undefined;
+
+  let sql = `${POSTS_SELECT} ORDER BY COALESCE(p.published_at, p.created_at) DESC`;
+  const params: number[] = [];
+
+  if (sanitizedLimit !== undefined) {
+    sql += " LIMIT ?";
+    params.push(sanitizedLimit);
+
+    if (sanitizedOffset && sanitizedOffset > 0) {
+      sql += " OFFSET ?";
+      params.push(sanitizedOffset);
+    }
+  } else if (sanitizedOffset && sanitizedOffset > 0) {
+    sql += " LIMIT 18446744073709551615 OFFSET ?";
+    params.push(sanitizedOffset);
+  }
 
   const rows = await query<PostRow[]>(sql, params);
 
@@ -106,7 +141,7 @@ export const getPublishedPosts = async (limit?: number): Promise<PublishedPostSu
 
 export const getPublishedPostSlugs = async (): Promise<string[]> => {
   const rows = await query<Array<RowDataPacket & { slug: string }>>(
-    `SELECT p.slug FROM posts p WHERE ${PUBLISHED_POST_CONDITION}`,
+    `SELECT p.slug FROM posts p WHERE ${PUBLISHED_POST_CONDITION} ORDER BY COALESCE(p.published_at, p.created_at) DESC`,
   );
 
   return rows.map((row) => row.slug);

@@ -36,14 +36,14 @@ const extractFirstParagraph = (html: string): string => {
 export const revalidate = 3600;
 
 export async function GET() {
-  const posts = await getPublishedPosts(RSS_ITEM_LIMIT);
+  const posts = await getPublishedPosts({ limit: RSS_ITEM_LIMIT });
   const siteName = getSiteName();
   const siteDescription = getSiteDescription();
   const siteUrl = createAbsoluteUrl("/");
 
   const items = posts
     .map((post) => {
-      const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/posts/${post.slug}`);
+      const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/${post.slug}`);
       const summaryText = post.summary?.trim() ?? "";
       const summaryHtml = summaryText
         ? `<p>${escapeXml(summaryText)}</p>`
