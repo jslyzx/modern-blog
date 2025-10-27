@@ -213,7 +213,7 @@ export default async function PostPage({ params }: PostPageProps) {
 
   return (
     <main className="container mx-auto max-w-3xl px-4 py-12">
-      <article className="prose prose-neutral mx-auto dark:prose-invert">
+      <article className="prose prose-neutral mx-auto max-w-none dark:prose-invert prose-pre:overflow-x-auto">
         <header className="not-prose mb-8 border-b border-border pb-6">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground">{post.title}</h1>
           {publishedLabel ? (
