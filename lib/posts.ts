@@ -13,6 +13,7 @@ interface PostRow extends RowDataPacket {
   summary: string | null;
   coverImageUrl: string | null;
   contentHtml: string | null;
+  contentMd: string | null;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
@@ -41,6 +42,7 @@ export interface PublishedPostSummary {
   metaDescription: string | null;
   coverImageUrl: string | null;
   contentHtml: string;
+  contentMd: string | null;
   publishedAt: Date | null;
   updatedAt: Date | null;
   createdAt: Date | null;
@@ -120,6 +122,7 @@ const deriveMetaDescription = (summary: string | null, contentHtml: string): str
 const mapPostRow = (row: PostRow): PublishedPostSummary => {
   const summary = normalizeNullableText(row.summary);
   const contentHtml = row.contentHtml ?? "";
+  const contentMd = normalizeNullableText(row.contentMd);
   const metaDescription = deriveMetaDescription(summary, contentHtml);
   const rawSlug = (row.slug ?? "").trim();
   const slug = rawSlug.replace(/^\/+/, "");
@@ -132,6 +135,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
     metaDescription,
     coverImageUrl: row.coverImageUrl ?? null,
     contentHtml,
+    contentMd,
     publishedAt: toDate(row.publishedAt),
     updatedAt: toDate(row.updatedAt),
     createdAt: toDate(row.createdAt),
@@ -147,6 +151,7 @@ const POSTS_SELECT = `
     p.summary AS summary,
     p.cover_image_url AS coverImageUrl,
     p.content_html AS contentHtml,
+    p.content_md AS contentMd,
     p.published_at AS publishedAt,
     p.updated_at AS updatedAt,
     p.created_at AS createdAt,
