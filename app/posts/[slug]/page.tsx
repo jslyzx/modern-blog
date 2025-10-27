@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const fallbackDescription = getSiteDescription();
   const description =
     post.metaDescription ??
-    post.excerpt ??
+    post.summary ??
     truncateWords(markdownToPlainText(post.content), 40) ||
     fallbackDescription;
 
@@ -119,7 +119,7 @@ export default async function PostPage({ params }: PostPageProps) {
     headline: post.title,
     description:
       post.metaDescription ??
-      post.excerpt ??
+      post.summary ??
       truncateWords(markdownToPlainText(post.content), 40) ||
       getSiteDescription(),
     datePublished: post.publishedAt?.toISOString(),

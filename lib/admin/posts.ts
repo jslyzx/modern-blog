@@ -152,7 +152,7 @@ type AdminPostDetailRow = RowDataPacket & {
   id: number;
   slug: string;
   title: string;
-  excerpt: string | null;
+  summary: string | null;
   content: string;
   cover_image_url: string | null;
   status: string | null;
@@ -173,7 +173,7 @@ export interface AdminPostDetail {
   id: number;
   slug: string;
   title: string;
-  excerpt: string;
+  summary: string;
   content: string;
   coverImageUrl: string;
   status: PostStatus;
@@ -192,7 +192,7 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
       id,
       slug,
       title,
-      excerpt,
+      summary,
       content,
       cover_image_url,
       status,
@@ -225,7 +225,7 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
     id: row.id,
     slug: row.slug,
     title: row.title,
-    excerpt: row.excerpt ?? "",
+    summary: row.summary ?? "",
     content: row.content,
     coverImageUrl: row.cover_image_url ?? "",
     status: isPostStatus(row.status) ? row.status : "draft",
@@ -242,7 +242,7 @@ export async function getPostById(id: number): Promise<AdminPostDetail | null> {
 export interface CreatePostInput {
   title: string;
   slug: string;
-  excerpt: string;
+  summary: string;
   content: string;
   coverImageUrl: string;
   status: PostStatus;
@@ -257,7 +257,7 @@ export async function createPost(input: CreatePostInput): Promise<number> {
     `INSERT INTO posts (
       title,
       slug,
-      excerpt,
+      summary,
       content,
       cover_image_url,
       status,
@@ -271,7 +271,7 @@ export async function createPost(input: CreatePostInput): Promise<number> {
     [
       input.title,
       input.slug,
-      input.excerpt,
+      input.summary,
       input.content,
       input.coverImageUrl || null,
       input.status,
@@ -298,7 +298,7 @@ export async function createPost(input: CreatePostInput): Promise<number> {
 export interface UpdatePostInput {
   title: string;
   slug: string;
-  excerpt: string;
+  summary: string;
   content: string;
   coverImageUrl: string;
   status: PostStatus;
@@ -312,7 +312,7 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
     `UPDATE posts SET
       title = ?,
       slug = ?,
-      excerpt = ?,
+      summary = ?,
       content = ?,
       cover_image_url = ?,
       status = ?,
@@ -328,7 +328,7 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
     [
       input.title,
       input.slug,
-      input.excerpt,
+      input.summary,
       input.content,
       input.coverImageUrl || null,
       input.status,
