@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getPublishedPosts, getPublishedTags } from "@/lib/posts";
-import { buildPostUrl, createAbsoluteUrl, ensureAbsoluteUrl } from "@/lib/site";
+import { createAbsoluteUrl } from "@/lib/site";
 
 export const revalidate = 3600;
 
@@ -19,8 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   for (const post of posts) {
-    const permalink = buildPostUrl(post.slug);
-    const url = ensureAbsoluteUrl(permalink) ?? permalink;
+    const url = createAbsoluteUrl(`/${post.slug}`);
 
     routes.push({
       url,

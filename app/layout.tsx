@@ -5,6 +5,7 @@ import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import {
   buildSiteUrl,
+  createAbsoluteUrl,
   ensureAbsoluteUrl,
   getMetadataBase,
   getOgImageFallback,
@@ -17,7 +18,7 @@ const siteDescription = getSiteDescription();
 const metadataBase = getMetadataBase();
 const defaultOgImage = getOgImageFallback();
 const siteCanonicalHref = buildSiteUrl("/");
-const siteCanonicalUrl = ensureAbsoluteUrl(siteCanonicalHref) ?? siteCanonicalHref;
+const siteCanonicalUrl = ensureAbsoluteUrl(siteCanonicalHref) ?? createAbsoluteUrl("/");
 
 export const metadata: Metadata = {
   metadataBase,

@@ -7,6 +7,7 @@ import { cache } from "react";
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import {
   buildPostUrl,
+  createAbsoluteUrl,
   ensureAbsoluteUrl,
   getOgImageFallback,
   getSiteDescription,
@@ -41,14 +42,11 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const siteName = getSiteName();
   const fallbackDescription = getSiteDescription();
   const plainTextContent = htmlToPlainText(post.contentHtml);
-  const description =
-    post.metaDescription ??
-    post.summary ??
-    truncateWords(plainTextContent, 40) ||
-    fallbackDescription;
+  const summary = post.summary?.trim();
+  const description = summary || truncateWords(plainTextContent, 40) || fallbackDescription;
 
-  const canonicalHref = buildPostUrl(post.slug);
-  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? canonicalHref;
+  const canonicalUrl =
+    ensureAbsoluteUrl(buildPostUrl(post.slug)) ?? createAbsoluteUrl(post.slug);
   const coverImage = ensureAbsoluteUrl(post.coverImageUrl) ?? getOgImageFallback();
 
   return {
@@ -105,7 +103,7 @@ export default async function PostPage({ params }: PostPageProps) {
   }
 
   const canonicalHref = buildPostUrl(post.slug);
-  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? canonicalHref;
+  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? createAbsoluteUrl(post.slug);
   const coverImage = ensureAbsoluteUrl(post.coverImageUrl);
   const ogImage = coverImage ?? getOgImageFallback();
   const publishedLabel = formatDate(post.publishedAt);
@@ -115,17 +113,14 @@ export default async function PostPage({ params }: PostPageProps) {
       : null;
 
   const plainTextContent = htmlToPlainText(post.contentHtml);
+  const summary = post.summary?.trim();
   const html = post.contentHtml;
   const siteName = getSiteName();
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: post.title,
-    description:
-      post.metaDescription ??
-      post.summary ??
-      truncateWords(plainTextContent, 40) ||
-      getSiteDescription(),
+    description: summary || truncateWords(plainTextContent, 40) || getSiteDescription(),
     datePublished: post.publishedAt?.toISOString(),
     dateModified: (post.updatedAt ?? post.publishedAt)?.toISOString(),
     image: coverImage ? [coverImage] : [ogImage],
