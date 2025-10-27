@@ -42,9 +42,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const fallbackDescription = getSiteDescription();
   const plainTextContent = htmlToPlainText(post.contentHtml);
   const description =
-    post.metaDescription ??
-    post.summary ??
-    truncateWords(plainTextContent, 40) ||
+    (post.summary ??
+    truncateWords(plainTextContent, 40)) ||
     fallbackDescription;
 
   const canonicalHref = buildPostUrl(post.slug);
@@ -122,9 +121,8 @@ export default async function PostPage({ params }: PostPageProps) {
     "@type": "BlogPosting",
     headline: post.title,
     description:
-      post.metaDescription ??
-      post.summary ??
-      truncateWords(plainTextContent, 40) ||
+      (post.summary ??
+      truncateWords(plainTextContent, 40)) ||
       getSiteDescription(),
     datePublished: post.publishedAt?.toISOString(),
     dateModified: (post.updatedAt ?? post.publishedAt)?.toISOString(),
