@@ -9,8 +9,8 @@ on:
       - main
 
 jobs:
-  checks:
-    name: Lint, type-check and test
+  quality:
+    name: Lint, type-check, test, and build
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +20,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10.19.0
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,11 +32,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run ESLint
+      - name: Lint
         run: pnpm lint
 
       - name: Type-check
         run: pnpm check
 
-      - name: Run tests
+      - name: Test
         run: pnpm test
+
+      - name: Build
+        run: pnpm build

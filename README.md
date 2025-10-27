@@ -1,5 +1,7 @@
 # Modern Blog Admin
 
+[![CI](https://github.com/jslyzx/modern-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/jslyzx/modern-blog/actions/workflows/ci.yml)
+
 This project provides a secure admin interface for the Modern Blog platform, built with Next.js App Router and credentials-based authentication powered by NextAuth.js.
 
 ## Getting started
@@ -87,7 +89,7 @@ Unit tests live under `tests/unit` and cover environment validation and password
 
 ## Continuous integration
 
-A GitHub Actions workflow is defined at `.github/workflows/ci.yml`. It installs dependencies with pnpm and runs `pnpm lint`, `pnpm check`, and `pnpm test` on pushes and pull requests targeting the `main` branch.
+A GitHub Actions workflow is defined at `.github/workflows/ci.yml`. It installs dependencies with pnpm using the GitHub Actions cache and runs `pnpm lint`, `pnpm check`, `pnpm test`, and `pnpm build` on pushes and pull requests targeting the `main` branch. Dependency installation uses `pnpm install --frozen-lockfile` so the lockfile must stay in sync with `package.json`.
 
 ## Authentication flow
 
