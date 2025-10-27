@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import { EditorContent, useEditor } from "@tiptap/react";
+import History from "@tiptap/extension-history";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -71,12 +72,12 @@ export function PostEditor({ contentHtml, editorKey, onChange }: PostEditorProps
       immediatelyRender: false,
       extensions: [
         StarterKit.configure({
-          history: {
-            depth: 100,
-          },
           heading: {
             levels: [1, 2, 3],
           },
+        }),
+        History.configure({
+          depth: 100,
         }),
         Link.configure({
           openOnClick: false,
@@ -112,7 +113,7 @@ export function PostEditor({ contentHtml, editorKey, onChange }: PostEditorProps
       return;
     }
 
-    editor.commands.setContent(normalizedContent, false);
+    editor.commands.setContent(normalizedContent, { emitUpdate: false });
     lastSyncedContentRef.current = normalizedContent;
   }, [editor, normalizedContent]);
 
