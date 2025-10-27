@@ -9,12 +9,10 @@ import { htmlToPlainText, renderPostContent, truncateWords } from "@/lib/markdow
 import { countTocItems, generateToc } from "@/lib/toc";
 import { buildPostPath } from "@/lib/paths";
 import {
-  buildPostUrl,
-  createAbsoluteUrl,
-  ensureAbsoluteUrl,
-  getOgImageFallback,
-  getSiteDescription,
-  getSiteName,
+  buildPostUrlFromConfig,
+  createAbsoluteUrlFromConfig,
+  ensureAbsoluteUrlFromConfig,
+  getSiteConfig,
 } from "@/lib/site";
 import {
   getPublishedPostBySlug,
@@ -125,18 +123,17 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
   const post = await loadPostOrRedirect(params.slug);
+  const site = await getSiteConfig();
 
-  const siteName = getSiteName();
-  const fallbackDescription = getSiteDescription();
+  const fallbackDescription = site.siteDescription;
   const postContent = getPostContentSource(post);
   const renderedHtml = await renderPostContent(postContent);
   const plainTextContent = htmlToPlainText(renderedHtml);
   const summary = post.summary?.trim();
   const description = summary || truncateWords(plainTextContent, 40) || fallbackDescription;
 
-  const canonicalUrl =
-    ensureAbsoluteUrl(buildPostUrl(post.slug)) ?? createAbsoluteUrl(buildPostPath(post.slug));
-  const coverImage = ensureAbsoluteUrl(post.coverImageUrl) ?? getOgImageFallback();
+  const canonicalUrl = createAbsoluteUrlFromConfig(site, buildPostPath(post.slug));
+  const coverImage = ensureAbsoluteUrlFromConfig(site, post.coverImageUrl) ?? site.defaultOgImage;
 
   return {
     title: post.title,
@@ -149,7 +146,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
       title: post.title,
       description,
       url: canonicalUrl,
-      siteName,
+      siteName: site.siteName,
       publishedTime: post.publishedAt?.toISOString(),
       modifiedTime: (post.updatedAt ?? post.publishedAt)?.toISOString(),
       tags: post.tags.map((tag) => tag.name),
@@ -186,11 +183,14 @@ const formatDate = (date: Date | null): string | null => {
 
 export default async function PostPage({ params }: PostPageProps) {
   const post = await loadPostOrRedirect(params.slug);
+  const site = await getSiteConfig();
 
-  const canonicalHref = buildPostUrl(post.slug);
-  const canonicalUrl = ensureAbsoluteUrl(canonicalHref) ?? createAbsoluteUrl(buildPostPath(post.slug));
-  const coverImage = ensureAbsoluteUrl(post.coverImageUrl);
-  const ogImage = coverImage ?? getOgImageFallback();
+  const canonicalHref = buildPostUrlFromConfig(site, post.slug);
+  const canonicalUrl =
+    ensureAbsoluteUrlFromConfig(site, canonicalHref) ??
+    createAbsoluteUrlFromConfig(site, buildPostPath(post.slug));
+  const coverImage = ensureAbsoluteUrlFromConfig(site, post.coverImageUrl);
+  const ogImage = coverImage ?? site.defaultOgImage;
   const publishedLabel = formatDate(post.publishedAt);
   const updatedLabel =
     post.updatedAt && post.publishedAt && post.updatedAt.getTime() !== post.publishedAt.getTime()
@@ -203,12 +203,12 @@ export default async function PostPage({ params }: PostPageProps) {
   const hasTableOfContents = countTocItems(tocItems) >= 3;
   const plainTextContent = htmlToPlainText(html);
   const summary = post.summary?.trim();
-  const siteName = getSiteName();
+  const siteName = site.siteName;
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: post.title,
-    description: summary || truncateWords(plainTextContent, 40) || getSiteDescription(),
+    description: summary || truncateWords(plainTextContent, 40) || site.siteDescription,
     datePublished: post.publishedAt?.toISOString(),
     dateModified: (post.updatedAt ?? post.publishedAt)?.toISOString(),
     image: coverImage ? [coverImage] : [ogImage],

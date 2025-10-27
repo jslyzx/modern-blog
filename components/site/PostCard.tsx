@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { htmlToPlainText, truncateWords } from "@/lib/markdown";
 import type { PublishedPostSummary, PublishedTag } from "@/lib/posts";
 import { buildPostPath } from "@/lib/paths";
-import { ensureAbsoluteUrl } from "@/lib/site";
+import { ensureAbsoluteUrlFromConfig, getSiteConfig } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type PostCardVariant = "default" | "featured";
@@ -46,18 +46,17 @@ const formatDateLabel = (date: Date | null): string | null => {
   }
 };
 
-const getCoverImage = (post: PublishedPostSummary): string | null => ensureAbsoluteUrl(post.coverImageUrl);
-
 const getSlugForPost = (post: PublishedPostSummary): string | null => {
   const slug = post.slug.trim();
 
   return slug.length > 0 ? slug : null;
 };
 
-export function PostCard({ post, variant = "default" }: PostCardProps) {
+export async function PostCard({ post, variant = "default" }: PostCardProps) {
+  const site = await getSiteConfig();
   const summary = getSummary(post);
   const hasSummary = summary.trim().length > 0;
-  const coverImage = getCoverImage(post);
+  const coverImage = ensureAbsoluteUrlFromConfig(site, post.coverImageUrl);
   const date = getDateForPost(post);
   const dateLabel = formatDateLabel(date);
   const slug = getSlugForPost(post);
