@@ -1,5 +1,5 @@
 import katex from "katex";
-import sanitizeHtml from "sanitize-html";
+import sanitizeHtml, { AllowedAttribute } from "sanitize-html";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
@@ -214,7 +214,7 @@ const allowedAttributes: sanitizeHtml.IOptions["allowedAttributes"] = {
 
 const extendAllowedAttributes = (tag: string, attributes: Array<string | RegExp>) => {
   const existing = allowedAttributes[tag] ?? [];
-  allowedAttributes[tag] = Array.from(new Set([...existing, ...attributes]));
+  allowedAttributes[tag] = Array.from(new Set([...existing, ...attributes])) as AllowedAttribute[];
 };
 
 extendAllowedAttributes("*", ["class", "aria-hidden", "aria-label", "role", "data-*", "lang"]);
