@@ -35,7 +35,7 @@ interface PostFormData {
 interface PostFormProps {
   initialData?: PostFormData;
   postId?: number;
-  initialTags: TagOption[];
+  initialTags?: TagOption[];
 }
 
 const createEmptyFormData = (): PostFormData => ({
@@ -97,6 +97,7 @@ const isSameFormData = (a: PostFormData | null | undefined, b: PostFormData | nu
 export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   const router = useRouter();
   const isEditing = typeof postId === "number";
+  const normalizedInitialTags = useMemo(() => initialTags ?? [], [initialTags]);
 
   const [formData, setFormData] = useState<PostFormData | null>(() => {
     if (initialData) {
@@ -112,12 +113,12 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   const [autoSlug, setAutoSlug] = useState(!initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tagOptions, setTagOptions] = useState<TagOption[]>(() => mergeTagOptions([], initialTags));
+  const [tagOptions, setTagOptions] = useState<TagOption[]>(() => mergeTagOptions([], normalizedInitialTags));
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [tagModalError, setTagModalError] = useState<string | null>(null);
   const [tagLoading, setTagLoading] = useState(false);
-  const [hasLoadedTags, setHasLoadedTags] = useState(initialTags.length > 0);
+  const [hasLoadedTags, setHasLoadedTags] = useState(normalizedInitialTags.length > 0);
   const [newTagName, setNewTagName] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
 
@@ -140,12 +141,13 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   }, [initialData, isEditing]);
 
   useEffect(() => {
-    setTagOptions((prev) => mergeTagOptions(prev, initialTags));
-
-    if (initialTags.length > 0) {
-      setHasLoadedTags(true);
+    if (normalizedInitialTags.length === 0) {
+      return;
     }
-  }, [initialTags]);
+
+    setTagOptions((prev) => mergeTagOptions(prev, normalizedInitialTags));
+    setHasLoadedTags(true);
+  }, [normalizedInitialTags]);
 
   const editorInstanceKey = postId ? `post-${postId}` : "post-new";
 
@@ -700,3 +702,5 @@ export function PostFormSkeleton() {
     </div>
   );
 }
+
+export default PostForm;
