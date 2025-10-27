@@ -43,6 +43,8 @@ const humanFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const cleanInlineCodeBackticks = (html: string) => html.replace(/<code>`([^`]*)`<\/code>/g, "<code>$1</code>");
+
 const toolbarButtonClasses = (active?: boolean) =>
   cn(
     "inline-flex h-9 items-center justify-center rounded-md border px-2 text-sm font-medium transition",
@@ -63,7 +65,7 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
   const [formulaType, setFormulaType] = useState<"inline" | "block">("block");
 
   const resolvedEditorKey = editorKey ?? "post-editor";
-  const normalizedContent = content || "";
+  const normalizedContent = cleanInlineCodeBackticks(content || "");
   const extensions = useMemo(
     () => [
       StarterKit.configure({
@@ -97,8 +99,9 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
       content: normalizedContent,
       onUpdate({ editor }) {
         const nextHtml = editor.getHTML();
-        lastSyncedContentRef.current = nextHtml;
-        onChange(nextHtml);
+        const cleanedHtml = cleanInlineCodeBackticks(nextHtml);
+        lastSyncedContentRef.current = cleanedHtml;
+        onChange(cleanedHtml);
       },
     },
     [resolvedEditorKey],
