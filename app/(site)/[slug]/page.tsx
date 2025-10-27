@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
-import { htmlToPlainText, truncateWords } from "@/lib/markdown";
+import { htmlToPlainText, renderPostHtml, truncateWords } from "@/lib/markdown";
 import { buildPostPath } from "@/lib/paths";
 import {
   buildPostUrl,
@@ -114,7 +114,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 
   const siteName = getSiteName();
   const fallbackDescription = getSiteDescription();
-  const plainTextContent = htmlToPlainText(post.contentHtml);
+  const renderedHtml = await renderPostHtml({ contentMd: post.contentMd, contentHtml: post.contentHtml });
+  const plainTextContent = htmlToPlainText(renderedHtml);
   const summary = post.summary?.trim();
   const description = summary || truncateWords(plainTextContent, 40) || fallbackDescription;
 
@@ -181,9 +182,9 @@ export default async function PostPage({ params }: PostPageProps) {
       ? formatDate(post.updatedAt)
       : null;
 
-  const plainTextContent = htmlToPlainText(post.contentHtml);
+  const html = await renderPostHtml({ contentMd: post.contentMd, contentHtml: post.contentHtml });
+  const plainTextContent = htmlToPlainText(html);
   const summary = post.summary?.trim();
-  const html = post.contentHtml;
   const siteName = getSiteName();
   const structuredData = {
     "@context": "https://schema.org",

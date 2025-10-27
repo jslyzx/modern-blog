@@ -1,3 +1,14 @@
+import katex from "katex";
+import sanitizeHtml from "sanitize-html";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import remarkRehype from "remark-rehype";
+import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
+import rehypeStringify from "rehype-stringify";
+
 const CODE_BLOCK_PLACEHOLDER = "@@CODE_BLOCK_";
 
 const escapeHtml = (value: string): string =>
@@ -141,4 +152,231 @@ export const truncateWords = (input: string, limit: number): string => {
   }
 
   return `${words.slice(0, limit).join(" ")}…`;
+};
+
+const MATHML_TAGS = [
+  "math",
+  "annotation",
+  "semantics",
+  "mrow",
+  "mi",
+  "mo",
+  "mn",
+  "msup",
+  "mfrac",
+  "mtext",
+  "mspace",
+  "msub",
+  "msubsup",
+  "msqrt",
+  "mroot",
+  "mtable",
+  "mtr",
+  "mtd",
+  "mstyle",
+  "mphantom",
+  "mpadded",
+  "menclose",
+  "mover",
+  "munder",
+  "munderover",
+  "mlabeledtr",
+  "mglyph",
+  "merror",
+];
+
+const EXTRA_ALLOWED_TAGS = [
+  "span",
+  "div",
+  "pre",
+  "code",
+  "figure",
+  "figcaption",
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "td",
+  "th",
+  "hr",
+  "sup",
+  "sub",
+];
+
+const ALLOWED_TAGS = Array.from(new Set([...sanitizeHtml.defaults.allowedTags, ...EXTRA_ALLOWED_TAGS, ...MATHML_TAGS]));
+
+const allowedAttributes: sanitizeHtml.IOptions["allowedAttributes"] = {
+  ...sanitizeHtml.defaults.allowedAttributes,
+};
+
+const extendAllowedAttributes = (tag: string, attributes: Array<string | RegExp>) => {
+  const existing = allowedAttributes[tag] ?? [];
+  allowedAttributes[tag] = Array.from(new Set([...existing, ...attributes]));
+};
+
+extendAllowedAttributes("*", ["class", "aria-hidden", "aria-label", "role", "data-*", "lang"]);
+extendAllowedAttributes("a", ["href", "name", "target", "rel", "title", "class"]);
+extendAllowedAttributes("img", ["src", "alt", "title", "width", "height", "loading", "decoding", "srcset", "sizes", "class"]);
+extendAllowedAttributes("code", ["class"]);
+extendAllowedAttributes("pre", ["class"]);
+extendAllowedAttributes("span", ["class", "style", "role", "aria-hidden", "aria-label", "data-*"]);
+extendAllowedAttributes("div", ["class", "style", "role", "aria-hidden", "aria-label", "data-*"]);
+extendAllowedAttributes("table", ["class"]);
+extendAllowedAttributes("thead", ["class"]);
+extendAllowedAttributes("tbody", ["class"]);
+extendAllowedAttributes("tfoot", ["class"]);
+extendAllowedAttributes("tr", ["class"]);
+extendAllowedAttributes("th", ["class", "colspan", "rowspan", "scope", "align"]);
+extendAllowedAttributes("td", ["class", "colspan", "rowspan", "align"]);
+extendAllowedAttributes("figure", ["class"]);
+extendAllowedAttributes("figcaption", ["class"]);
+extendAllowedAttributes("math", ["xmlns", "display", "class"]);
+extendAllowedAttributes("annotation", ["encoding", "class"]);
+extendAllowedAttributes("semantics", ["class"]);
+extendAllowedAttributes("mrow", ["class"]);
+extendAllowedAttributes("mi", ["class"]);
+extendAllowedAttributes("mo", ["class"]);
+extendAllowedAttributes("mn", ["class"]);
+extendAllowedAttributes("msup", ["class"]);
+extendAllowedAttributes("mfrac", ["class"]);
+extendAllowedAttributes("mtext", ["class"]);
+extendAllowedAttributes("mspace", ["class", "width", "height", "depth"]);
+extendAllowedAttributes("msub", ["class"]);
+extendAllowedAttributes("msubsup", ["class"]);
+extendAllowedAttributes("msqrt", ["class"]);
+extendAllowedAttributes("mroot", ["class"]);
+extendAllowedAttributes("mstyle", ["class", "scriptlevel", "displaystyle", "mathcolor", "mathbackground"]);
+extendAllowedAttributes("mpadded", ["class", "height", "depth", "width", "lspace", "voffset"]);
+extendAllowedAttributes("menclose", ["class", "notation"]);
+extendAllowedAttributes("mover", ["class"]);
+extendAllowedAttributes("munder", ["class"]);
+extendAllowedAttributes("munderover", ["class"]);
+extendAllowedAttributes("mlabeledtr", ["class"]);
+extendAllowedAttributes("mglyph", ["class", "alt"]);
+extendAllowedAttributes("merror", ["class"]);
+
+const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: ALLOWED_TAGS,
+  allowedAttributes,
+  allowedSchemes: ["http", "https", "mailto", "tel", "data"],
+  allowedSchemesByTag: {
+    img: ["http", "https", "data"],
+  },
+  allowProtocolRelative: true,
+};
+
+const BLOCK_MATH_PATTERN = /\$\$([\s\S]+?)\$\$/g;
+const INLINE_MATH_PATTERN = /(?<!\\)\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)/g;
+const CODE_ELEMENT_PATTERN = /(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/gi;
+
+const createMarkdownProcessor = () =>
+  unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeRaw)
+    .use(rehypeKatex)
+    .use(rehypeStringify, { allowDangerousHtml: true });
+
+const createKatexHtml = (expression: string, displayMode: boolean): string => {
+  const trimmed = expression.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    return katex.renderToString(trimmed, {
+      displayMode,
+      throwOnError: false,
+      strict: "ignore",
+    });
+  } catch (_error) {
+    const safe = escapeHtml(trimmed);
+    return displayMode ? `<div class="katex-error">${safe}</div>` : `<span class="katex-error">${safe}</span>`;
+  }
+};
+
+const replaceMathInSegment = (segment: string): string => {
+  if (!segment || segment.indexOf("$") === -1) {
+    return segment;
+  }
+
+  const withBlockMath = segment.replace(BLOCK_MATH_PATTERN, (_match, expression) =>
+    createKatexHtml(String(expression ?? ""), true),
+  );
+
+  return withBlockMath.replace(INLINE_MATH_PATTERN, (_match, expression) =>
+    createKatexHtml(String(expression ?? ""), false),
+  );
+};
+
+const renderMathInHtml = (html: string): string => {
+  if (!html || html.indexOf("$") === -1) {
+    return html;
+  }
+
+  CODE_ELEMENT_PATTERN.lastIndex = 0;
+
+  let result = "";
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = CODE_ELEMENT_PATTERN.exec(html)) !== null) {
+    const preceding = html.slice(lastIndex, match.index);
+
+    if (preceding) {
+      result += replaceMathInSegment(preceding);
+    }
+
+    result += match[0];
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex === 0) {
+    return replaceMathInSegment(html);
+  }
+
+  if (lastIndex < html.length) {
+    result += replaceMathInSegment(html.slice(lastIndex));
+  }
+
+  return result;
+};
+
+const sanitizeAndTrim = (html: string): string => {
+  const sanitized = sanitizeHtml(html, SANITIZE_OPTIONS);
+  return sanitized.trim();
+};
+
+export interface RenderPostHtmlInput {
+  contentMd?: string | null;
+  contentHtml?: string | null;
+}
+
+export const renderPostHtml = async ({ contentMd, contentHtml }: RenderPostHtmlInput): Promise<string> => {
+  const markdown = contentMd?.trim();
+
+  if (markdown) {
+    try {
+      const processor = createMarkdownProcessor();
+      const file = await processor.process(markdown);
+      return sanitizeAndTrim(String(file));
+    } catch (_error) {
+      const fallbackHtml = markdownToHtml(markdown);
+      return sanitizeAndTrim(fallbackHtml);
+    }
+  }
+
+  const htmlSource = contentHtml ?? "";
+
+  if (!htmlSource.trim()) {
+    return "";
+  }
+
+  const withKatex = renderMathInHtml(htmlSource);
+
+  return sanitizeAndTrim(withKatex);
 };
