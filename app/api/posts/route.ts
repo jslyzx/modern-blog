@@ -6,6 +6,40 @@ import { generateSlug } from "@/lib/slug";
 
 const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
 
+const parseTagIds = (value: unknown): number[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const uniqueIds = new Set<number>();
+
+  for (const element of value) {
+    let candidate: number | null = null;
+
+    if (typeof element === "number") {
+      candidate = element;
+    } else if (typeof element === "string") {
+      const parsed = Number.parseInt(element, 10);
+
+      if (Number.isFinite(parsed)) {
+        candidate = parsed;
+      }
+    }
+
+    if (candidate === null || !Number.isFinite(candidate)) {
+      continue;
+    }
+
+    const normalized = Math.trunc(candidate);
+
+    if (normalized > 0) {
+      uniqueIds.add(normalized);
+    }
+  }
+
+  return Array.from(uniqueIds);
+};
+
 export async function POST(request: Request) {
   const session = await auth();
 
@@ -36,6 +70,7 @@ export async function POST(request: Request) {
     const contentHtml = typeof data.contentHtml === "string" ? data.contentHtml : typeof data.content === "string" ? data.content : "";
     const isFeatured = typeof data.isFeatured === "boolean" ? data.isFeatured : Boolean(data.featured);
     const allowComments = Boolean(data.allowComments ?? true);
+    const tagIds = parseTagIds(data.tagIds ?? data.tags);
 
     const postId = await createPost({
       title: data.title,
@@ -47,7 +82,7 @@ export async function POST(request: Request) {
       isFeatured,
       allowComments,
       authorId: parseInt(session.user.id, 10),
-      tags: Array.isArray(data.tags) ? data.tags : [],
+      tagIds,
     });
 
     return NextResponse.json({ success: true, id: postId });

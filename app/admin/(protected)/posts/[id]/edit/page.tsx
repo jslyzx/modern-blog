@@ -32,7 +32,7 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
     status: post.status,
     isFeatured: post.isFeatured,
     allowComments: post.allowComments,
-    tags: post.tags.map((tag) => tag.id),
+    tagIds: post.tags.map((tag) => tag.id),
   };
 
   return (
@@ -43,7 +43,7 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
       </header>
 
       <Suspense fallback={<PostFormSkeleton />}>
-        <PostForm postId={post.id} initialData={initialData} availableTags={availableTags} />
+        <PostForm postId={post.id} initialData={initialData} initialTags={availableTags} />
       </Suspense>
     </section>
   );

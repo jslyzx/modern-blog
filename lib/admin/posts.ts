@@ -1,7 +1,8 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
+import { getPool, query } from "@/lib/db";
 import { randomSlugId } from "@/lib/slug";
-import { query } from "@/lib/db";
+import { getAllTagOptions, replacePostTags, type TagOption } from "@/lib/tags";
 
 export const POST_STATUS_VALUES = ["published", "draft", "archived"] as const;
 export type PostStatus = (typeof POST_STATUS_VALUES)[number];
@@ -228,10 +229,6 @@ type AdminPostDetailRow = RowDataPacket & {
   tag_slug: string | null;
 };
 
-type TagRow = RowDataPacket & {
-  id: number;
-  name: string;
-};
 
 export interface AdminPostDetail {
   id: number;
@@ -324,51 +321,69 @@ export interface CreatePostInput {
   isFeatured: boolean;
   allowComments: boolean;
   authorId: number;
-  tags: number[];
+  tagIds: number[];
 }
 
 export async function createPost(input: CreatePostInput): Promise<number> {
-  const publishedAtExpression = input.status === "published" ? "NOW()" : "NULL";
+  const pool = getPool();
+  let connection: PoolConnection | null = null;
 
-  const result = await query<ResultSetHeader>(
-    `INSERT INTO posts (
-      title,
-      slug,
-      summary,
-      content_html,
-      cover_image_url,
-      status,
-      is_featured,
-      allow_comments,
-      author_id,
-      published_at,
-      created_at,
-      updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${publishedAtExpression}, NOW(), NOW())`,
-    [
-      input.title,
-      input.slug,
-      input.summary,
-      input.contentHtml,
-      input.coverImageUrl || null,
-      input.status,
-      input.isFeatured ? 1 : 0,
-      input.allowComments ? 1 : 0,
-      input.authorId,
-    ],
-  );
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-  const postId = result.insertId;
+    const publishedAtExpression = input.status === "published" ? "NOW()" : "NULL";
 
-  if (input.tags.length > 0) {
-    const values = input.tags.map((tagId) => [postId, tagId]);
-    await query(
-      `INSERT INTO post_tags (post_id, tag_id) VALUES ${values.map(() => "(?, ?)").join(", ")}`,
-      values.flat(),
+    const [result] = await connection.query<ResultSetHeader>(
+      `INSERT INTO posts (
+        title,
+        slug,
+        summary,
+        content_html,
+        cover_image_url,
+        status,
+        is_featured,
+        allow_comments,
+        author_id,
+        published_at,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${publishedAtExpression}, NOW(), NOW())`,
+      [
+        input.title,
+        input.slug,
+        input.summary,
+        input.contentHtml,
+        input.coverImageUrl || null,
+        input.status,
+        input.isFeatured ? 1 : 0,
+        input.allowComments ? 1 : 0,
+        input.authorId,
+      ],
     );
-  }
 
-  return postId;
+    const postId = result.insertId;
+
+    await replacePostTags(connection, postId, input.tagIds);
+
+    await connection.commit();
+
+    return postId;
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Failed to rollback createPost transaction", { error: rollbackError });
+      }
+    }
+
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 }
 
 export interface UpdatePostInput {
@@ -380,56 +395,76 @@ export interface UpdatePostInput {
   status: PostStatus;
   isFeatured: boolean;
   allowComments: boolean;
-  tags: number[];
+  tagIds: number[];
 }
 
 export async function updatePost(id: number, input: UpdatePostInput): Promise<boolean> {
-  const result = await query<ResultSetHeader>(
-    `UPDATE posts SET
-      title = ?,
-      slug = ?,
-      summary = ?,
-      content_html = ?,
-      cover_image_url = ?,
-      status = ?,
-      is_featured = ?,
-      allow_comments = ?,
-      updated_at = NOW(),
-      published_at = CASE
-        WHEN ? = 'published' AND published_at IS NULL THEN NOW()
-        WHEN ? = 'draft' THEN NULL
-        ELSE published_at
-      END
-    WHERE id = ?`,
-    [
-      input.title,
-      input.slug,
-      input.summary,
-      input.contentHtml,
-      input.coverImageUrl || null,
-      input.status,
-      input.isFeatured ? 1 : 0,
-      input.allowComments ? 1 : 0,
-      input.status,
-      input.status,
-      id,
-    ],
-  );
+  const pool = getPool();
+  let connection: PoolConnection | null = null;
 
-  await query("DELETE FROM post_tags WHERE post_id = ?", [id]);
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-  if (input.tags.length > 0) {
-    const values = input.tags.map((tagId) => [id, tagId]);
-    await query(
-      `INSERT INTO post_tags (post_id, tag_id) VALUES ${values.map(() => "(?, ?)").join(", ")}`,
-      values.flat(),
+    const [result] = await connection.query<ResultSetHeader>(
+      `UPDATE posts SET
+        title = ?,
+        slug = ?,
+        summary = ?,
+        content_html = ?,
+        cover_image_url = ?,
+        status = ?,
+        is_featured = ?,
+        allow_comments = ?,
+        updated_at = NOW(),
+        published_at = CASE
+          WHEN ? = 'published' AND published_at IS NULL THEN NOW()
+          WHEN ? = 'draft' THEN NULL
+          ELSE published_at
+        END
+      WHERE id = ?`,
+      [
+        input.title,
+        input.slug,
+        input.summary,
+        input.contentHtml,
+        input.coverImageUrl || null,
+        input.status,
+        input.isFeatured ? 1 : 0,
+        input.allowComments ? 1 : 0,
+        input.status,
+        input.status,
+        id,
+      ],
     );
-  }
 
-  return result.affectedRows > 0;
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return false;
+    }
+
+    await replacePostTags(connection, id, input.tagIds);
+
+    await connection.commit();
+
+    return true;
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Failed to rollback updatePost transaction", { error: rollbackError });
+      }
+    }
+
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 }
 
-export async function getAllTags(): Promise<Array<{ id: number; name: string }>> {
-  const rows = await query<TagRow[]>("SELECT id, name FROM tags ORDER BY name ASC");
-  return rows.map((row) => ({ id: row.id, name: row.name }));
+export async function getAllTags(): Promise<TagOption[]> {
+  return getAllTagOptions();
 }
