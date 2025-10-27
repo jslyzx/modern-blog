@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { EditorContent, useEditor } from "@tiptap/react";
-import History from "@tiptap/extension-history";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -68,13 +67,9 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
   const extensions = useMemo(
     () => [
       StarterKit.configure({
-        history: false,
         heading: {
           levels: [1, 2, 3],
         },
-      }),
-      History.configure({
-        depth: 100,
       }),
       Link.configure({
         openOnClick: false,
