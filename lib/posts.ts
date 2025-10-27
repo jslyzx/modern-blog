@@ -27,6 +27,14 @@ interface TagRow extends RowDataPacket {
   lastUpdated: Date | string | null;
 }
 
+interface PostTagsRow extends RowDataPacket {
+  postId: number;
+  tagId: number | null;
+  tagSlug: string | null;
+  tagName: string | null;
+  lastUpdated: Date | string | null;
+}
+
 export interface PublishedTag {
   id: number;
   slug: string;
@@ -163,20 +171,37 @@ const POSTS_SELECT = `
 export interface GetPublishedPostsOptions {
   limit?: number;
   offset?: number;
+  excludeIds?: ReadonlyArray<number>;
 }
 
 export const getPublishedPosts = async (
   options: GetPublishedPostsOptions = {},
 ): Promise<PublishedPostSummary[]> => {
-  const { limit, offset } = options;
+  const { limit, offset, excludeIds } = options;
 
   const sanitizedLimit =
     typeof limit === "number" && Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : undefined;
   const sanitizedOffset =
     typeof offset === "number" && Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : undefined;
+  const sanitizedExcludeIds = Array.isArray(excludeIds)
+    ? Array.from(
+        new Set(
+          excludeIds
+            .filter((value) => typeof value === "number" && Number.isFinite(value))
+            .map((value) => Math.max(0, Math.floor(value))),
+        ),
+      ).filter((value) => value > 0)
+    : [];
 
-  let sql = `${POSTS_SELECT} ORDER BY COALESCE(p.published_at, p.created_at) DESC`;
-  const params: number[] = [];
+  let sql = `${POSTS_SELECT}`;
+  const params: Array<number | number[]> = [];
+
+  if (sanitizedExcludeIds.length) {
+    sql += " AND p.id NOT IN (?)";
+    params.push(sanitizedExcludeIds);
+  }
+
+  sql += " ORDER BY COALESCE(p.published_at, p.created_at) DESC";
 
   if (sanitizedLimit !== undefined) {
     sql += " LIMIT ?";
@@ -196,6 +221,114 @@ export const getPublishedPosts = async (
   return rows.map(mapPostRow);
 };
 
+export const getPublishedPostsCount = async (): Promise<number> => {
+  const rows = await query<Array<RowDataPacket & { count: number | string | bigint | null }>>(
+    `SELECT COUNT(*) AS count FROM posts p WHERE ${PUBLISHED_POST_CONDITION}`,
+  );
+
+  if (!rows.length) {
+    return 0;
+  }
+
+  const rawCount = rows[0]?.count ?? 0;
+  const numericCount = Number(rawCount);
+
+  return Number.isNaN(numericCount) ? 0 : numericCount;
+};
+
+export const getFeaturedPublishedPosts = async (
+  limit = 3,
+): Promise<PublishedPostSummary[]> => {
+  const sanitizedLimit =
+    typeof limit === "number" && Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 3;
+
+  if (sanitizedLimit === 0) {
+    return [];
+  }
+
+  const rows = await query<PostRow[]>(
+    `${POSTS_SELECT} AND p.is_featured = 1 ORDER BY COALESCE(p.published_at, p.created_at) DESC LIMIT ?`,
+    [sanitizedLimit],
+  );
+
+  return rows.map(mapPostRow);
+};
+
+export const getTagsForPublishedPosts = async (
+  postIds: ReadonlyArray<number> = [],
+): Promise<Map<number, PublishedTag[]>> => {
+  const sanitizedIds = Array.from(
+    new Set(
+      postIds
+        .filter((value) => typeof value === "number" && Number.isFinite(value))
+        .map((value) => Math.max(0, Math.floor(value))),
+    ),
+  ).filter((value) => value > 0);
+
+  if (!sanitizedIds.length) {
+    return new Map();
+  }
+
+  try {
+    const rows = await query<PostTagsRow[]>(
+      `
+        SELECT
+          pt.post_id AS postId,
+          t.id AS tagId,
+          t.slug AS tagSlug,
+          t.name AS tagName,
+          MAX(p.updated_at) AS lastUpdated
+        FROM post_tags pt
+        INNER JOIN tags t ON t.id = pt.tag_id
+        INNER JOIN posts p ON p.id = pt.post_id
+        WHERE pt.post_id IN (?)
+          AND ${PUBLISHED_POST_CONDITION}
+        GROUP BY pt.post_id, t.id, t.slug, t.name
+        ORDER BY t.name ASC
+      `,
+      [sanitizedIds],
+    );
+
+    const tagsByPost = new Map<number, PublishedTag[]>();
+
+    for (const row of rows) {
+      if (typeof row.postId !== "number" || typeof row.tagId !== "number") {
+        continue;
+      }
+
+      const name = normalizeNullableText(row.tagName);
+
+      if (!name) {
+        continue;
+      }
+
+      const tag: PublishedTag = {
+        id: row.tagId,
+        slug: row.tagSlug?.trim() ?? "",
+        name,
+        updatedAt: toDate(row.lastUpdated),
+      };
+
+      const existing = tagsByPost.get(row.postId);
+
+      if (existing) {
+        existing.push(tag);
+      } else {
+        tagsByPost.set(row.postId, [tag]);
+      }
+    }
+
+    return tagsByPost;
+  } catch (error) {
+    console.warn("Failed to load tags for posts", {
+      postIds: sanitizedIds,
+      error,
+    });
+
+    return new Map();
+  }
+};
+
 export const getPublishedPostSlugs = async (): Promise<string[]> => {
   const rows = await query<Array<RowDataPacket & { slug: string | null }>>(
     `SELECT p.slug FROM posts p WHERE ${PUBLISHED_POST_CONDITION} ORDER BY COALESCE(p.published_at, p.created_at) DESC`,
@@ -207,39 +340,9 @@ export const getPublishedPostSlugs = async (): Promise<string[]> => {
 };
 
 const getTagsForPost = async (postId: number): Promise<PublishedTag[]> => {
-  try {
-    const rows = await query<TagRow[]>(
-      `
-        SELECT
-          t.id,
-          t.slug,
-          t.name,
-          MAX(p.updated_at) AS lastUpdated
-        FROM tags t
-        INNER JOIN post_tags pt ON pt.tag_id = t.id
-        INNER JOIN posts p ON p.id = pt.post_id
-        WHERE pt.post_id = ?
-          AND ${PUBLISHED_POST_CONDITION}
-        GROUP BY t.id, t.slug, t.name
-        ORDER BY t.name ASC
-      `,
-      [postId],
-    );
+  const tagsByPost = await getTagsForPublishedPosts([postId]);
 
-    return rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      updatedAt: toDate(row.lastUpdated),
-    }));
-  } catch (error) {
-    console.warn("Failed to load tags for post", {
-      postId,
-      error,
-    });
-
-    return [];
-  }
+  return tagsByPost.get(postId) ?? [];
 };
 
 export const getPublishedPostBySlug = async (slug: string): Promise<PublishedPost | null> => {
