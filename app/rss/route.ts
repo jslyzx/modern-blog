@@ -1,4 +1,3 @@
-import { markdownToHtml } from "@/lib/markdown";
 import { getPublishedPosts } from "@/lib/posts";
 import {
   createAbsoluteUrl,
@@ -24,14 +23,12 @@ const toRssDate = (value?: Date | null): string => {
   return date.toUTCString();
 };
 
-const buildSummaryHtml = (markdown: string): string => {
-  const html = markdownToHtml(markdown);
-
-  if (!html) {
+const extractFirstParagraph = (html: string): string => {
+  if (!html?.trim()) {
     return "";
   }
 
-  const paragraphMatch = html.match(/<p>[\s\S]*?<\/p>/);
+  const paragraphMatch = html.match(/<p[\s>][\s\S]*?<\/p>/i);
 
   return paragraphMatch ? paragraphMatch[0] : html;
 };
@@ -47,8 +44,10 @@ export async function GET() {
   const items = posts
     .map((post) => {
       const link = ensureAbsoluteUrl(post.canonicalUrl) ?? createAbsoluteUrl(`/posts/${post.slug}`);
-      const summarySource = post.summary ?? post.content;
-      const summaryHtml = buildSummaryHtml(summarySource) || markdownToHtml(summarySource) || `<p>${escapeXml(post.title)}</p>`;
+      const summaryText = post.summary?.trim() ?? "";
+      const summaryHtml = summaryText
+        ? `<p>${escapeXml(summaryText)}</p>`
+        : extractFirstParagraph(post.contentHtml) || `<p>${escapeXml(post.title)}</p>`;
       const cdata = sanitizeCdata(summaryHtml);
       const publishedAt = toRssDate(post.publishedAt);
       const guidSeed = post.updatedAt?.getTime() ?? post.publishedAt?.getTime() ?? post.id;

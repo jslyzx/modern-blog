@@ -104,12 +104,10 @@ export const markdownToHtml = (markdown: string): string => {
   return html;
 };
 
-export const markdownToPlainText = (markdown: string): string => {
-  if (!markdown?.trim()) {
+export const htmlToPlainText = (html: string): string => {
+  if (!html?.trim()) {
     return "";
   }
-
-  const html = markdownToHtml(markdown);
 
   return html
     .replace(/<[^>]+>/g, " ")
@@ -121,6 +119,14 @@ export const markdownToPlainText = (markdown: string): string => {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+};
+
+export const markdownToPlainText = (markdown: string): string => {
+  if (!markdown?.trim()) {
+    return "";
+  }
+
+  return htmlToPlainText(markdownToHtml(markdown));
 };
 
 export const truncateWords = (input: string, limit: number): string => {

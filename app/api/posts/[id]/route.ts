@@ -133,15 +133,19 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
+    const contentHtml = typeof data.contentHtml === "string" ? data.contentHtml : typeof data.content === "string" ? data.content : "";
+    const isFeatured = typeof data.isFeatured === "boolean" ? data.isFeatured : Boolean(data.featured);
+    const allowComments = Boolean(data.allowComments ?? true);
+
     const updated = await updatePost(postId, {
       title: data.title,
       slug: data.slug || data.title.toLowerCase().replace(/\s+/g, "-"),
-      summary: data.summary || "",
-      content: data.content || "",
-      coverImageUrl: data.coverImageUrl || "",
+      summary: typeof data.summary === "string" ? data.summary : "",
+      contentHtml,
+      coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : "",
       status: (data.status || "draft") as PostStatus,
-      featured: Boolean(data.featured),
-      allowComments: Boolean(data.allowComments ?? true),
+      isFeatured,
+      allowComments,
       tags: Array.isArray(data.tags) ? data.tags : [],
     });
 
