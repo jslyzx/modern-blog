@@ -5,6 +5,8 @@ import Script from "next/script";
 import { ReactNode } from "react";
 
 import { ThemeProvider, THEME_STORAGE_KEY } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
+import { ToastProvider } from "@/components/ui/use-toast";
 import { createAbsoluteUrlFromConfig, getSiteConfig } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -76,7 +78,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </Script>
       </head>
       <body className={cn("min-h-screen bg-background font-sans antialiased")}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+            <Toaster />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
