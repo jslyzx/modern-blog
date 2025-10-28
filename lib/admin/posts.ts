@@ -1,5 +1,6 @@
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
+import { savePostRevisionSnapshot } from "@/lib/admin/post-revisions";
 import { getPool, query } from "@/lib/db";
 import { randomSlugId } from "@/lib/slug";
 import { getAllTagOptions, replacePostTags, type TagOption } from "@/lib/tags";
@@ -408,6 +409,7 @@ export interface CreatePostInput {
   slug: string;
   summary: string;
   contentHtml: string;
+  contentMd?: string | null;
   coverImageUrl: string;
   status: PostStatus;
   isFeatured: boolean;
@@ -432,6 +434,7 @@ export async function createPost(input: CreatePostInput): Promise<number> {
         slug,
         summary,
         content_html,
+        content_md,
         cover_image_url,
         status,
         is_featured,
@@ -440,12 +443,13 @@ export async function createPost(input: CreatePostInput): Promise<number> {
         published_at,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${publishedAtExpression}, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${publishedAtExpression}, NOW(), NOW())`,
       [
         input.title,
         input.slug,
         input.summary,
         input.contentHtml,
+        input.contentMd ?? null,
         input.coverImageUrl || null,
         input.status,
         input.isFeatured ? 1 : 0,
@@ -457,6 +461,21 @@ export async function createPost(input: CreatePostInput): Promise<number> {
     const postId = result.insertId;
 
     await replacePostTags(connection, postId, input.tagIds);
+
+    await savePostRevisionSnapshot(connection, {
+      postId,
+      title: input.title,
+      summary: input.summary,
+      contentHtml: input.contentHtml,
+      contentMd: input.contentMd ?? null,
+      coverImageUrl: input.coverImageUrl || null,
+      isFeatured: input.isFeatured,
+      allowComments: input.allowComments,
+      status: input.status,
+      slug: input.slug,
+      authorId: input.authorId,
+      editorId: input.authorId,
+    });
 
     await connection.commit();
 
@@ -483,6 +502,7 @@ export interface UpdatePostInput {
   slug: string;
   summary: string;
   contentHtml: string;
+  contentMd?: string | null;
   coverImageUrl: string;
   status: PostStatus;
   isFeatured: boolean;
@@ -490,7 +510,15 @@ export interface UpdatePostInput {
   tagIds: number[];
 }
 
-export async function updatePost(id: number, input: UpdatePostInput): Promise<boolean> {
+export interface UpdatePostOptions {
+  editorId?: number | null;
+}
+
+export async function updatePost(
+  id: number,
+  input: UpdatePostInput,
+  options: UpdatePostOptions = {},
+): Promise<boolean> {
   const pool = getPool();
   let connection: PoolConnection | null = null;
 
@@ -504,6 +532,7 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
         slug = ?,
         summary = ?,
         content_html = ?,
+        content_md = ?,
         cover_image_url = ?,
         status = ?,
         is_featured = ?,
@@ -520,6 +549,7 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
         input.slug,
         input.summary,
         input.contentHtml,
+        input.contentMd ?? null,
         input.coverImageUrl || null,
         input.status,
         input.isFeatured ? 1 : 0,
@@ -536,6 +566,20 @@ export async function updatePost(id: number, input: UpdatePostInput): Promise<bo
     }
 
     await replacePostTags(connection, id, input.tagIds);
+
+    await savePostRevisionSnapshot(connection, {
+      postId: id,
+      title: input.title,
+      summary: input.summary,
+      contentHtml: input.contentHtml,
+      contentMd: input.contentMd ?? null,
+      coverImageUrl: input.coverImageUrl || null,
+      isFeatured: input.isFeatured,
+      allowComments: input.allowComments,
+      status: input.status,
+      slug: input.slug,
+      editorId: options.editorId ?? null,
+    });
 
     await connection.commit();
 

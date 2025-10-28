@@ -1,0 +1,57 @@
+import { NextResponse } from "next/server";
+
+import { auth } from "@/auth";
+import { getPostRevisionById } from "@/lib/admin/post-revisions";
+
+type RouteContext = {
+  params: {
+    id?: string | string[];
+    revisionId?: string | string[];
+  };
+};
+
+const parseId = (value: string | string[] | undefined): number | null => {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+
+export async function GET(_request: Request, context: RouteContext) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return unauthorized();
+  }
+
+  const postId = parseId(context.params.id);
+  const revisionId = parseId(context.params.revisionId);
+
+  if (!postId || !revisionId) {
+    return NextResponse.json({ error: "参数无效" }, { status: 400 });
+  }
+
+  try {
+    const revision = await getPostRevisionById(postId, revisionId);
+
+    if (!revision) {
+      return NextResponse.json({ error: "未找到历史版本" }, { status: 404 });
+    }
+
+    return NextResponse.json({ revision });
+  } catch (error) {
+    console.error("Failed to load post revision detail", { postId, revisionId, error });
+    return NextResponse.json({ error: "加载历史版本失败" }, { status: 500 });
+  }
+}
