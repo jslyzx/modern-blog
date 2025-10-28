@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import { getPostById } from "@/lib/admin/posts";
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from "@/lib/preview-token";
@@ -27,7 +28,7 @@ const parseId = (value: string | string[] | undefined): number | null => {
   return parsed;
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 export async function POST(_request: Request, context: RouteContext) {
   const session = await auth();
@@ -39,18 +40,18 @@ export async function POST(_request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("文章 ID 无效", "INVALID_IDENTIFIER");
   }
 
   try {
     const post = await getPostById(postId);
 
     if (!post) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+      return apiErrors.notFound("未找到文章", "POST_NOT_FOUND");
     }
 
     if (post.status === "archived") {
-      return NextResponse.json({ error: "已归档文章无法生成预览链接" }, { status: 400 });
+      return apiErrors.badRequest("已归档文章无法生成预览链接", "POST_ARCHIVED");
     }
 
     const { token, payload } = createPreviewToken(postId);
@@ -76,6 +77,6 @@ export async function POST(_request: Request, context: RouteContext) {
       error,
     });
 
-    return NextResponse.json({ error: "生成预览链接失败" }, { status: 500 });
+    return apiErrors.internal("生成预览链接失败", "PREVIEW_TOKEN_FAILED");
   }
 }

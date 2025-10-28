@@ -4,6 +4,7 @@ import type { IncomingMessage } from "node:http";
 import { promises as fs } from "node:fs/promises";
 import { Readable } from "node:stream";
 
+import { apiErrors, createApiErrorResponse } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import { LocalMediaStorage, isSvgMimeType } from "@/lib/media";
 import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
@@ -30,7 +31,7 @@ const cleanupTempFile = async (filepath: string | undefined) => {
   }
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 const UNSAFE_SVG_CONTENT_PATTERN = /<\s*script|<\s*foreignobject|on[a-z]+\s*=|javascript:|data:text\//i;
 
@@ -101,10 +102,11 @@ export async function POST(request: NextRequest) {
   const contentType = request.headers.get("content-type");
 
   if (!contentType || !contentType.toLowerCase().includes("multipart/form-data")) {
-    return NextResponse.json(
-      { error: "请求的 Content-Type 必须为 multipart/form-data。" },
-      { status: 415 },
-    );
+    return createApiErrorResponse({
+      status: 415,
+      error: "请求的 Content-Type 必须为 multipart/form-data。",
+      code: "UNSUPPORTED_MEDIA_TYPE",
+    });
   }
 
   let parsedFile: FormidableFile | null = null;

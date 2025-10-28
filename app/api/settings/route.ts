@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import {
   getSiteSettings,
@@ -10,10 +11,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
-const unsupportedKey = () =>
-  NextResponse.json({ error: "不支持的设置项" }, { status: 400 });
+const unsupportedKey = () => apiErrors.badRequest("不支持的设置项", "INVALID_SETTING_KEY");
 
 const parseBaseUrl = (value: string): string | null => {
   const trimmed = value.trim();
@@ -46,7 +46,7 @@ const handleWrite = async (request: Request) => {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse settings payload", { error });
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const key = typeof payload?.key === "string" ? payload.key : "";
@@ -61,13 +61,13 @@ const handleWrite = async (request: Request) => {
   switch (key) {
     case "site_title": {
       if (typeof rawValue !== "string") {
-        return NextResponse.json({ error: "站点标题不能为空" }, { status: 400 });
+        return apiErrors.badRequest("站点标题不能为空", "VALIDATION_ERROR");
       }
 
       normalized = rawValue.trim();
 
       if (!normalized) {
-        return NextResponse.json({ error: "站点标题不能为空" }, { status: 400 });
+        return apiErrors.badRequest("站点标题不能为空", "VALIDATION_ERROR");
       }
       break;
     }
@@ -78,7 +78,7 @@ const handleWrite = async (request: Request) => {
       }
 
       if (typeof rawValue !== "string") {
-        return NextResponse.json({ error: "站点描述格式不正确" }, { status: 400 });
+        return apiErrors.badRequest("站点描述格式不正确", "VALIDATION_ERROR");
       }
 
       normalized = rawValue.trim() || null;
@@ -91,7 +91,7 @@ const handleWrite = async (request: Request) => {
       }
 
       if (typeof rawValue !== "string") {
-        return NextResponse.json({ error: "默认分享图像格式不正确" }, { status: 400 });
+        return apiErrors.badRequest("默认分享图像格式不正确", "VALIDATION_ERROR");
       }
 
       normalized = rawValue.trim() || null;
@@ -104,13 +104,13 @@ const handleWrite = async (request: Request) => {
       }
 
       if (typeof rawValue !== "string") {
-        return NextResponse.json({ error: "站点地址格式不正确" }, { status: 400 });
+        return apiErrors.badRequest("站点地址格式不正确", "VALIDATION_ERROR");
       }
 
       normalized = parseBaseUrl(rawValue);
 
       if (!normalized) {
-        return NextResponse.json({ error: "站点地址无效" }, { status: 400 });
+        return apiErrors.badRequest("站点地址无效", "INVALID_URL");
       }
 
       break;
@@ -127,7 +127,7 @@ const handleWrite = async (request: Request) => {
     return NextResponse.json({ settings, updated: { key, value: normalized } });
   } catch (error) {
     console.error("Failed to update site setting", { key, error });
-    return NextResponse.json({ error: "保存设置失败" }, { status: 500 });
+    return apiErrors.internal("保存设置失败", "SAVE_SETTINGS_FAILED");
   }
 };
 
@@ -149,7 +149,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ settings: result });
   } catch (error) {
     console.error("Failed to load site settings", { error });
-    return NextResponse.json({ error: "获取站点设置失败" }, { status: 500 });
+    return apiErrors.internal("获取站点设置失败", "GET_SETTINGS_FAILED");
   }
 }
 

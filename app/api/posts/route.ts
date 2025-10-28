@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import { createPost, ensureUniquePostSlug, type PostStatus } from "@/lib/admin/posts";
 import { generateSlug } from "@/lib/slug";
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 const parseTagIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) {
@@ -53,13 +54,13 @@ export async function POST(request: Request) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse POST body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const data = payload as any;
 
   if (!data.title || typeof data.title !== "string") {
-    return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
+    return apiErrors.badRequest("标题不能为空", "VALIDATION_ERROR");
   }
 
   try {
@@ -96,6 +97,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id: postId });
   } catch (error) {
     console.error("Failed to create post", error);
-    return NextResponse.json({ error: "创建文章失败" }, { status: 500 });
+    return apiErrors.internal("创建文章失败", "CREATE_POST_FAILED");
   }
 }

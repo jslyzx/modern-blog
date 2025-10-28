@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import { getPostRevisions } from "@/lib/admin/post-revisions";
 
@@ -25,7 +26,7 @@ const parseId = (value: string | string[] | undefined): number | null => {
   return parsed;
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 export async function GET(_request: Request, context: RouteContext) {
   const session = await auth();
@@ -37,7 +38,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("文章 ID 无效", "INVALID_IDENTIFIER");
   }
 
   try {
@@ -46,6 +47,6 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ revisions, count: revisions.length });
   } catch (error) {
     console.error("Failed to load post revisions", { postId, error });
-    return NextResponse.json({ error: "加载文章历史版本失败" }, { status: 500 });
+    return apiErrors.internal("加载文章历史版本失败", "GET_POST_REVISIONS_FAILED");
   }
 }

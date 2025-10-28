@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import {
   createTag,
@@ -11,7 +12,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 const serializeTag = (tag: TagRecord) => ({
   id: tag.id,
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Failed to list tags", { search, page, pageSize, error });
-    return NextResponse.json({ error: "获取标签列表失败" }, { status: 500 });
+    return apiErrors.internal("获取标签列表失败", "LIST_TAGS_FAILED");
   }
 }
 
@@ -95,19 +96,19 @@ export async function POST(request: Request) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse POST body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const rawName = (payload as { name?: unknown })?.name;
   const name = normalizeTagName(rawName ?? "");
 
   if (!name) {
-    return NextResponse.json({ error: "标签名称不能为空" }, { status: 400 });
+    return apiErrors.badRequest("标签名称不能为空", "VALIDATION_ERROR");
   }
 
   try {
     if (await isTagNameTaken(name)) {
-      return NextResponse.json({ error: "标签名称已存在" }, { status: 400 });
+      return apiErrors.badRequest("标签名称已存在", "DUPLICATE_TAG_NAME");
     }
 
     const tag = await createTag({ name });
@@ -117,9 +118,9 @@ export async function POST(request: Request) {
     console.error("Failed to create tag", { name, error });
 
     if (error instanceof Error && error.message.includes("already exists")) {
-      return NextResponse.json({ error: "标签名称已存在" }, { status: 400 });
+      return apiErrors.badRequest("标签名称已存在", "DUPLICATE_TAG_NAME");
     }
 
-    return NextResponse.json({ error: "创建标签失败" }, { status: 500 });
+    return apiErrors.internal("创建标签失败", "CREATE_TAG_FAILED");
   }
 }
