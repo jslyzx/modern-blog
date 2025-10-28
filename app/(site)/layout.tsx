@@ -47,6 +47,11 @@ export default async function SiteLayout({ children }: SiteLayoutProps) {
         <div className="container mx-auto max-w-5xl px-4 py-8 text-center text-sm text-muted-foreground sm:text-left">
           <p className="text-base font-semibold text-foreground">{siteName}</p>
           <p className="mt-2">{siteDescription}</p>
+          <p className="mt-4">
+            <Link href="/rss" className="font-medium text-primary transition-colors hover:text-primary/80">
+              订阅 RSS
+            </Link>
+          </p>
           <p className="mt-4 text-xs text-muted-foreground/80">© {currentYear} {siteName}. All rights reserved.</p>
         </div>
       </footer>

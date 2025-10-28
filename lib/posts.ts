@@ -19,6 +19,9 @@ interface PostRow extends RowDataPacket {
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
   isFeatured: number | null;
+  authorId: number | null;
+  authorName: string | null;
+  authorEmail: string | null;
 }
 
 interface TagRow extends RowDataPacket {
@@ -43,6 +46,12 @@ export interface PublishedTag {
   updatedAt: Date | null;
 }
 
+export interface PublishedPostAuthor {
+  id: number | null;
+  name: string | null;
+  email: string | null;
+}
+
 export interface PublishedPostSummary {
   id: number;
   slug: string;
@@ -57,6 +66,7 @@ export interface PublishedPostSummary {
   updatedAt: Date | null;
   createdAt: Date | null;
   isFeatured: boolean;
+  author: PublishedPostAuthor;
 }
 
 export interface PublishedPost extends PublishedPostSummary {
@@ -137,6 +147,9 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
   const rawSlug = (row.slug ?? "").trim();
   const slug = rawSlug.replace(/^\/+/, "");
   const coverImageUrl = normalizeNullableText(row.coverImageUrl);
+  const authorId = typeof row.authorId === "number" ? row.authorId : null;
+  const authorName = normalizeNullableText(row.authorName);
+  const authorEmail = normalizeNullableText(row.authorEmail);
 
   return {
     id: row.id,
@@ -152,6 +165,11 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
     updatedAt: toDate(row.updatedAt),
     createdAt: toDate(row.createdAt),
     isFeatured: Boolean(row.isFeatured),
+    author: {
+      id: authorId,
+      name: authorName,
+      email: authorEmail,
+    },
   };
 };
 
@@ -167,8 +185,12 @@ const POSTS_SELECT = `
     p.published_at AS publishedAt,
     p.updated_at AS updatedAt,
     p.created_at AS createdAt,
-    p.is_featured AS isFeatured
+    p.is_featured AS isFeatured,
+    p.author_id AS authorId,
+    u.username AS authorName,
+    u.email AS authorEmail
   FROM posts p
+  LEFT JOIN users u ON u.id = p.author_id
   WHERE ${PUBLISHED_POST_CONDITION}
 `;
 
