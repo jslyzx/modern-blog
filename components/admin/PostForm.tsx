@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { generateSlug } from "@/lib/slug";
 
@@ -152,8 +153,43 @@ const formatAutoSaveTime = (timestamp: number) =>
     second: "2-digit",
   }).format(new Date(timestamp));
 
+const formatPreviewExpiryTime = (timestamp: number): string => {
+  try {
+    return new Intl.DateTimeFormat("zh-CN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(timestamp));
+  } catch (error) {
+    console.warn("Failed to format preview expiry", error);
+    return new Date(timestamp).toLocaleString();
+  }
+};
+
+const formatPreviewRemaining = (timestamp: number): string => {
+  const diff = timestamp - Date.now();
+
+  if (diff <= 0) {
+    return "已过期";
+  }
+
+  const totalMinutes = Math.ceil(diff / (60 * 1000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    if (minutes === 0) {
+      return `${hours} 小时`;
+    }
+
+    return `${hours} 小时 ${minutes} 分钟`;
+  }
+
+  return `${Math.max(totalMinutes, 1)} 分钟`;
+};
+
 export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const isEditing = typeof postId === "number";
   const normalizedInitialTags = useMemo(() => initialTags ?? [], [initialTags]);
   const storageKey = useMemo(() => getStorageKey(postId), [postId]);
@@ -184,6 +220,9 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
   const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [generatingPreviewLink, setGeneratingPreviewLink] = useState(false);
+  const [previewLinkInfo, setPreviewLinkInfo] = useState<{ url: string; expiresAt: number } | null>(null);
+  const [lastPreviewCopyFailed, setLastPreviewCopyFailed] = useState(false);
 
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAutoSavedSnapshotRef = useRef<string | null>(null);
@@ -219,6 +258,11 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
     setTagOptions((prev) => mergeTagOptions(prev, normalizedInitialTags));
     setHasLoadedTags(true);
   }, [normalizedInitialTags]);
+
+  useEffect(() => {
+    setPreviewLinkInfo(null);
+    setLastPreviewCopyFailed(false);
+  }, [postId]);
 
   useEffect(() => {
     if (!formData) {
@@ -746,6 +790,140 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
     );
   }, [tagOptions, tagSearch]);
 
+  const handleGeneratePreviewLink = useCallback(async () => {
+    if (!postId) {
+      toast({
+        title: "无法生成预览链接",
+        description: "请先保存文章，再尝试生成预览链接。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (generatingPreviewLink) {
+      return;
+    }
+
+    setGeneratingPreviewLink(true);
+    setLastPreviewCopyFailed(false);
+
+    try {
+      const response = await fetch(`/api/posts/${postId}/preview-token`, {
+        method: "POST",
+      });
+
+      let result: any = null;
+
+      try {
+        result = await response.json();
+      } catch {
+        // ignore parse errors
+      }
+
+      if (!response.ok) {
+        const message = typeof result?.error === "string" ? result.error : "生成预览链接失败";
+        throw new Error(message);
+      }
+
+      const previewUrl = typeof result?.previewUrl === "string" ? result.previewUrl : null;
+      const expiresAtCandidate =
+        typeof result?.expiresAt === "string" ? Date.parse(result.expiresAt) : result?.expiresAt;
+      const expiresInFallback =
+        typeof result?.expiresInMs === "number" && Number.isFinite(result.expiresInMs)
+          ? Math.max(0, Math.trunc(result.expiresInMs))
+          : null;
+
+      let expiresAtMs =
+        typeof expiresAtCandidate === "number" && Number.isFinite(expiresAtCandidate)
+          ? expiresAtCandidate
+          : Number.NaN;
+
+      if (Number.isNaN(expiresAtMs) && expiresInFallback !== null) {
+        expiresAtMs = Date.now() + expiresInFallback;
+      }
+
+      if (!previewUrl || Number.isNaN(expiresAtMs)) {
+        throw new Error("预览链接响应缺少必要信息，请稍后重试。");
+      }
+
+      setPreviewLinkInfo({ url: previewUrl, expiresAt: expiresAtMs });
+
+      let copySucceeded = false;
+
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(previewUrl);
+          copySucceeded = true;
+          toast({
+            title: "预览链接已复制",
+            description: `链接将在 ${formatPreviewRemaining(expiresAtMs)} 后过期。`,
+            variant: "success",
+          });
+        } catch (copyError) {
+          console.warn("Failed to copy preview link", copyError);
+        }
+      }
+
+      if (!copySucceeded) {
+        setLastPreviewCopyFailed(true);
+        toast({
+          title: "预览链接已生成",
+          description: "请手动复制下方的链接。",
+        });
+      } else {
+        setLastPreviewCopyFailed(false);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "生成预览链接失败";
+      toast({
+        title: "生成预览链接失败",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingPreviewLink(false);
+    }
+  }, [postId, generatingPreviewLink, toast]);
+
+  const handleCopyPreviewLink = useCallback(async () => {
+    if (!previewLinkInfo) {
+      toast({
+        title: "暂无预览链接",
+        description: "请先生成预览链接。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setLastPreviewCopyFailed(true);
+      toast({
+        title: "无法复制链接",
+        description: "浏览器不支持剪贴板操作，请手动复制链接。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(previewLinkInfo.url);
+      setLastPreviewCopyFailed(false);
+      toast({
+        title: "预览链接已复制",
+        description: `链接将在 ${formatPreviewRemaining(previewLinkInfo.expiresAt)} 后过期。`,
+        variant: "success",
+      });
+    } catch (error) {
+      console.warn("Failed to copy preview link", error);
+      setLastPreviewCopyFailed(true);
+      toast({
+        title: "复制失败",
+        description: "浏览器阻止了剪贴板操作，请手动复制链接。",
+        variant: "destructive",
+      });
+    }
+  }, [previewLinkInfo, toast]);
+
   const handleSubmit = async (e: FormEvent, submitStatus: "draft" | "published") => {
     e.preventDefault();
 
@@ -1029,25 +1207,71 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
         </div>
       </div>
 
-      <div className="flex gap-3 border-t pt-6">
-        <Button type="button" variant="outline" onClick={() => router.push("/admin/posts")} disabled={loading}>
-          取消
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={(e) => handleSubmit(e, "draft")}
-          disabled={loading || !formData.title}
-        >
-          保存草稿
-        </Button>
-        <Button
-          type="button"
-          onClick={(e) => handleSubmit(e, "published")}
-          disabled={loading || !formData.title}
-        >
-          {loading ? "保存中..." : postId ? "更新" : "发布"}
-        </Button>
+      <div className="border-t pt-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={() => router.push("/admin/posts")} disabled={loading}>
+            取消
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={(e) => handleSubmit(e, "draft")}
+            disabled={loading || !formData.title}
+          >
+            保存草稿
+          </Button>
+          <Button
+            type="button"
+            onClick={(e) => handleSubmit(e, "published")}
+            disabled={loading || !formData.title}
+          >
+            {loading ? "保存中..." : postId ? "更新" : "发布"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGeneratePreviewLink}
+            disabled={loading || generatingPreviewLink || !postId}
+            title={!postId ? "请先保存文章以生成预览链接" : undefined}
+          >
+            {generatingPreviewLink ? "生成中..." : "生成预览链接"}
+          </Button>
+        </div>
+        {postId ? (
+          <div className="mt-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+            {previewLinkInfo ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-primary">预览链接</span>
+                  <Button type="button" size="sm" variant="secondary" onClick={handleCopyPreviewLink}>
+                    复制链接
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" asChild>
+                    <a href={previewLinkInfo.url} target="_blank" rel="noreferrer">
+                      打开预览
+                    </a>
+                  </Button>
+                </div>
+                <p className="break-all rounded-md border border-primary/20 bg-background px-3 py-2 text-foreground">
+                  {previewLinkInfo.url}
+                </p>
+                <p className="text-xs">
+                  将在 <span className="font-medium text-primary">{formatPreviewRemaining(previewLinkInfo.expiresAt)}</span> 后过期（
+                  {formatPreviewExpiryTime(previewLinkInfo.expiresAt)}）。
+                </p>
+                {lastPreviewCopyFailed ? (
+                  <p className="text-xs text-destructive">无法自动复制，请手动复制上方链接。</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-xs">
+                生成后的预览链接有效期为 24 小时，可分享给协作者或审阅者查看文章草稿。
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-4 text-xs text-muted-foreground">保存文章后即可生成 24 小时有效的预览链接。</p>
+        )}
       </div>
 
       <Dialog open={tagDialogOpen} onOpenChange={handleDialogOpenChange}>
