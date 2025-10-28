@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS posts (
   cover_image_url VARCHAR(512) NULL,
   status ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'draft',
   is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  view_count INT UNSIGNED NOT NULL DEFAULT 0,
   allow_comments TINYINT(1) NOT NULL DEFAULT 1,
   author_id INT UNSIGNED NULL,
   published_at DATETIME NULL,

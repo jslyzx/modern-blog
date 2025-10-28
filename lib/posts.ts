@@ -11,6 +11,8 @@ const KNOWN_POST_STATUSES = ["draft", "published", "archived"] as const;
 type KnownPostStatus = (typeof KNOWN_POST_STATUSES)[number];
 const KNOWN_POST_STATUS_SET = new Set<string>(KNOWN_POST_STATUSES);
 
+type NumericValue = number | string | bigint | null | undefined;
+
 interface PostRow extends RowDataPacket {
   id: number;
   slug: string | null;
@@ -23,6 +25,7 @@ interface PostRow extends RowDataPacket {
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
   isFeatured: number | null;
+  viewCount: NumericValue;
   authorId: number | null;
   authorName: string | null;
   authorEmail: string | null;
@@ -71,6 +74,7 @@ export interface PublishedPostSummary {
   updatedAt: Date | null;
   createdAt: Date | null;
   isFeatured: boolean;
+  viewCount: number;
   author: PublishedPostAuthor;
 }
 
@@ -98,6 +102,34 @@ const toDate = (value: Date | string | null): Date | null => {
   }
 
   return parsed;
+};
+
+const toNonNegativeInteger = (value: NumericValue): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 0 ? 0 : Math.trunc(value);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+
+    return parsed < 0 ? 0 : Math.trunc(parsed);
+  }
+
+  if (typeof value === "bigint") {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+
+    return numeric < 0 ? 0 : Math.trunc(numeric);
+  }
+
+  return 0;
 };
 
 const normalizeNullableText = (value: string | null): string | null => {
@@ -174,6 +206,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
     updatedAt: toDate(row.updatedAt),
     createdAt: toDate(row.createdAt),
     isFeatured: Boolean(row.isFeatured),
+    viewCount: toNonNegativeInteger(row.viewCount),
     author: {
       id: authorId,
       name: authorName,
@@ -195,6 +228,7 @@ const BASE_POSTS_SELECT = `
     p.updated_at AS updatedAt,
     p.created_at AS createdAt,
     p.is_featured AS isFeatured,
+    p.view_count AS viewCount,
     p.author_id AS authorId,
     u.username AS authorName,
     u.email AS authorEmail,
@@ -322,6 +356,46 @@ const sanitizePostIds = (postIds: ReadonlyArray<number>): number[] =>
         .map((value) => Math.max(0, Math.trunc(value))),
     ),
   ).filter((value) => value > 0);
+
+export interface GetMostViewedPublishedPostsOptions {
+  limit?: number;
+  excludeIds?: ReadonlyArray<number>;
+  includeCoverImageMetadata?: boolean;
+}
+
+export const getMostViewedPublishedPosts = async (
+  options: GetMostViewedPublishedPostsOptions = {},
+): Promise<PublishedPostSummary[]> => {
+  const { limit, excludeIds, includeCoverImageMetadata } = options;
+  const defaultLimit = 5;
+  const sanitizedLimit =
+    typeof limit === "number" && Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : defaultLimit;
+  const sanitizedExcludeIds = Array.isArray(excludeIds) ? sanitizePostIds(excludeIds) : [];
+
+  if (sanitizedLimit === 0) {
+    return [];
+  }
+
+  let sql = `${POSTS_SELECT}`;
+  const params: Array<number | number[]> = [];
+
+  if (sanitizedExcludeIds.length) {
+    sql += " AND p.id NOT IN (?)";
+    params.push(sanitizedExcludeIds);
+  }
+
+  sql += " ORDER BY p.view_count DESC, COALESCE(p.published_at, p.created_at) DESC LIMIT ?";
+  params.push(sanitizedLimit);
+
+  const rows = await query<PostRow[]>(sql, params);
+  const posts = rows.map(mapPostRow);
+
+  if (includeCoverImageMetadata) {
+    await enrichCoverImageMetadata(posts);
+  }
+
+  return posts;
+};
 
 interface FetchTagsForPostsOptions {
   includeAllStatuses?: boolean;
