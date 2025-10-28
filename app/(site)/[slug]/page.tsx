@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
+import { PostContent } from "@/components/site/PostContent";
 import { TableOfContents } from "@/components/site/TableOfContents";
 import { htmlToPlainText, renderPostContent, truncateWords } from "@/lib/markdown";
 import { countTocItems, generateToc } from "@/lib/toc";
@@ -189,7 +190,15 @@ export default async function PostPage({ params }: PostPageProps) {
   const canonicalUrl =
     ensureAbsoluteUrlFromConfig(site, canonicalHref) ??
     createAbsoluteUrlFromConfig(site, buildPostPath(post.slug));
-  const coverImage = ensureAbsoluteUrlFromConfig(site, post.coverImageUrl);
+  const coverMetadata = post.coverImageMetadata;
+  const coverImageSource = coverMetadata?.original.url ?? post.coverImageUrl ?? null;
+  const coverImage = coverImageSource ? ensureAbsoluteUrlFromConfig(site, coverImageSource) : null;
+  const coverImageBlur = coverMetadata?.blurDataUrl ?? null;
+  const coverImageWebp = coverMetadata?.webp?.url
+    ? ensureAbsoluteUrlFromConfig(site, coverMetadata.webp.url)
+    : null;
+  const coverImageWidth = coverMetadata?.original.width ?? 1200;
+  const coverImageHeight = coverMetadata?.original.height ?? 630;
   const ogImage = coverImage ?? site.defaultOgImage;
   const publishedLabel = formatDate(post.publishedAt);
   const updatedLabel =
@@ -261,14 +270,19 @@ export default async function PostPage({ params }: PostPageProps) {
               <Image
                 src={coverImage}
                 alt={post.title}
-                width={1200}
-                height={630}
+                width={coverImageWidth || 1200}
+                height={coverImageHeight || 630}
                 className="h-auto w-full object-cover"
                 sizes="(min-width: 768px) 768px, 100vw"
+                placeholder={coverImageBlur ? "blur" : "empty"}
+                blurDataURL={coverImageBlur ?? undefined}
+                loading="eager"
+                priority
+                data-webp={coverImageWebp ?? undefined}
               />
             </figure>
           ) : null}
-          <section dangerouslySetInnerHTML={{ __html: html }} />
+          <PostContent html={html} className="contents" />
         </article>
         {hasTableOfContents ? <TableOfContents items={tocItems} /> : null}
       </div>

@@ -173,11 +173,38 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
         const imageAttributes: Record<string, unknown> = {
           src: payload.url,
           alt: file.name,
+          decoding: "async",
+          loading: "lazy",
+          "data-original-src": payload.url,
         };
 
         if (typeof payload.width === "number" && typeof payload.height === "number") {
           imageAttributes.width = payload.width;
           imageAttributes.height = payload.height;
+        }
+
+        if (typeof payload.blurDataUrl === "string" && payload.blurDataUrl) {
+          imageAttributes["data-blur"] = payload.blurDataUrl;
+        }
+
+        if (typeof payload.webpUrl === "string" && payload.webpUrl) {
+          imageAttributes["data-webp"] = payload.webpUrl;
+        }
+
+        if (typeof payload.mimeType === "string" && payload.mimeType) {
+          imageAttributes["data-mime-type"] = payload.mimeType;
+        }
+
+        if (typeof payload.webpMimeType === "string" && payload.webpMimeType) {
+          imageAttributes["data-webp-mime-type"] = payload.webpMimeType;
+        }
+
+        if (typeof payload.sizeBytes === "number" && Number.isFinite(payload.sizeBytes)) {
+          imageAttributes["data-size-bytes"] = payload.sizeBytes;
+        }
+
+        if (typeof payload.webpSizeBytes === "number" && Number.isFinite(payload.webpSizeBytes)) {
+          imageAttributes["data-webp-size-bytes"] = payload.webpSizeBytes;
         }
 
         editor?.chain().focus().setImage(imageAttributes).run();

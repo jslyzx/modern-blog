@@ -18,6 +18,7 @@ Modern Blog Admin is a secure operations console for the Modern Blog platform. I
   - [Nginx reverse proxy](#nginx-reverse-proxy)
   - [Alibaba Cloud HTTP quick start](#alibaba-cloud-http-quick-start)
   - [Optional systemd service](#optional-systemd-service)
+  - [Media optimisation & CDN](#media-optimisation--cdn)
 - [Troubleshooting](#troubleshooting)
 
 ## Overview
@@ -138,7 +139,7 @@ Back up your production database before applying schema changes or running maint
 - [x] Rich text editor powered by Tiptap with live preview, Markdown shortcuts, KaTeX/LaTeX rendering, and Shiki syntax highlighting.
 - [x] Post management (create, edit, publish, archive, delete) with automatic slug generation and status filters.
 - [x] Tag management with uniqueness safeguards, Pinyin slug migration, and post/tag association counts.
-- [x] Image uploads (JPEG, PNG, WebP, GIF, SVG) with 5&nbsp;MB size limits, SVG sanitisation, metadata extraction, and persistent storage under `public/uploads`.
+- [x] Image uploads (JPEG, PNG, WebP, GIF, SVG) with 5&nbsp;MB limits, SVG sanitisation, blur placeholder generation, WebP variants, and persistent storage + metadata under `public/uploads`.
 - [x] RESTful admin APIs for posts, tags, media uploads, and database health checks guarded by authenticated sessions.
 - [x] Search endpoints for published posts with tag hydration and pagination-friendly responses.
 - [x] SEO outputs including dynamic metadata, Open Graph/Twitter cards, sitemap.xml, robots.txt, and RSS feeds.
@@ -276,8 +277,8 @@ For deployments on Alibaba Cloud ECS or ACK:
    - Reload Nginx and validate access over HTTP before enabling HTTPS with an Alibaba Cloud SSL certificate or a managed load balancer.
 
 6. **Verify connectivity**
-   - Test database access from the ECS host: `mysql -h <host> -u <user> -p`.
-   - Hit `http://your-domain/api/health/db` to confirm the application can reach MySQL.
+    - Test database access from the ECS host: `mysql -h <host> -u <user> -p`.
+    - Hit `http://your-domain/api/health/db` to confirm the application can reach MySQL.
 
 ### Optional systemd service
 
@@ -296,6 +297,24 @@ For bare-metal or VM deployments without Docker:
    sudo systemctl daemon-reload
    sudo systemctl enable --now modern-blog-admin
    ```
+
+### Media optimisation & CDN
+
+Every image upload is normalised under `public/uploads/<year>/<month>/` together with a companion `*.metadata.json` file. The metadata captures the original dimensions, a pre-computed WebP variant, and the base64 blur placeholder consumed by `next/image`. When the admin site renders posts, these artefacts allow critical images to load lazily with a low-resolution preview while modern browsers receive WebP responses automatically.
+
+To offload bandwidth and improve global latency:
+
+1. **Cloudflare CDN**
+   - Point a subdomain such as `media.example.com` at the server hosting `public/uploads/`.
+   - Create a Cache Rule for `/uploads/*` with "Cache everything" and set an appropriate edge TTL (e.g., 1 day) while respecting origin cache headers.
+   - Enable the "Polish" feature (or "Automatic WebP" under Speed → Optimisation) so Cloudflare negotiates WebP/AVIF with supporting clients. The original files and `.metadata.json` remain available for older browsers.
+
+2. **Aliyun OSS + CDN**
+   - Sync `public/uploads/` to an OSS bucket (via `ossutil cp -r public/uploads oss://<bucket>/uploads`).
+   - Configure an Aliyun CDN distribution with the OSS bucket as the origin and cache `/uploads/*` aggressively. Make sure the CDN honours existing file extensions so the generated `.webp` assets are served correctly.
+   - Update Nginx (or your load balancer) to rewrite `/uploads/` requests to the CDN hostname, or set `SITE_BASE_URL` to the CDN domain so absolute URLs point at OSS.
+
+Regardless of the provider, keep `.metadata.json` files in sync with their corresponding images—Next.js relies on them to hydrate blur placeholders—and continue mounting `public/uploads` as a persistent volume when running the app container.
 
 ## Troubleshooting
 

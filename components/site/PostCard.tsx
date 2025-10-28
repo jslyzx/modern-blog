@@ -56,7 +56,13 @@ export async function PostCard({ post, variant = "default" }: PostCardProps) {
   const site = await getSiteConfig();
   const summary = getSummary(post);
   const hasSummary = summary.trim().length > 0;
-  const coverImage = ensureAbsoluteUrlFromConfig(site, post.coverImageUrl);
+  const coverMetadata = post.coverImageMetadata;
+  const coverImageSource = coverMetadata?.original.url ?? post.coverImageUrl ?? null;
+  const coverImage = coverImageSource ? ensureAbsoluteUrlFromConfig(site, coverImageSource) : null;
+  const coverImageBlur = coverMetadata?.blurDataUrl ?? null;
+  const coverImageWebp = coverMetadata?.webp?.url
+    ? ensureAbsoluteUrlFromConfig(site, coverMetadata.webp.url)
+    : null;
   const date = getDateForPost(post);
   const dateLabel = formatDateLabel(date);
   const slug = getSlugForPost(post);
@@ -107,6 +113,10 @@ export async function PostCard({ post, variant = "default" }: PostCardProps) {
             sizes={imageSizes}
             className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105"
             priority={variant === "featured"}
+            placeholder={coverImageBlur ? "blur" : "empty"}
+            blurDataURL={coverImageBlur ?? undefined}
+            loading={variant === "featured" ? "eager" : "lazy"}
+            data-webp={coverImageWebp ?? undefined}
           />
         </div>
       ) : null}
