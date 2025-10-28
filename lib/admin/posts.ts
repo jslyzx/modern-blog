@@ -13,6 +13,11 @@ export type PostStatusFilter = (typeof POST_STATUS_FILTERS)[number];
 const POST_STATUS_VALUE_SET = new Set<string>(POST_STATUS_VALUES);
 const POST_STATUS_FILTER_SET = new Set<string>(POST_STATUS_FILTERS);
 
+export const BULK_POST_ACTIONS = ["delete", "publish", "draft", "archive"] as const;
+export type BulkPostAction = (typeof BULK_POST_ACTIONS)[number];
+
+const BULK_POST_ACTION_SET = new Set<string>(BULK_POST_ACTIONS);
+
 export const DEFAULT_POST_STATUS_FILTER: PostStatusFilter = "all";
 
 type AdminPostRow = RowDataPacket & {
@@ -52,6 +57,9 @@ export const isPostStatus = (value: unknown): value is PostStatus =>
 export const isPostStatusFilter = (value: unknown): value is PostStatusFilter =>
   typeof value === "string" && POST_STATUS_FILTER_SET.has(value);
 
+export const isBulkPostAction = (value: unknown): value is BulkPostAction =>
+  typeof value === "string" && BULK_POST_ACTION_SET.has(value);
+
 const toIsoString = (value: Date | string | null): string | null => {
   if (!value) {
     return null;
@@ -84,6 +92,10 @@ const mapRowToAdminPost = (row: AdminPostRow): AdminPost => ({
 });
 
 type SlugLookupRow = RowDataPacket & {
+  id: number;
+};
+
+type IdLookupRow = RowDataPacket & {
   id: number;
 };
 
@@ -208,6 +220,86 @@ export async function updatePostStatus(id: number, status: PostStatus): Promise<
   const result = await query<ResultSetHeader>(sql, params);
 
   return result.affectedRows > 0;
+}
+
+export interface BulkPostActionError {
+  id: number;
+  message: string;
+}
+
+export interface BulkPostActionResult {
+  successCount: number;
+  errors: BulkPostActionError[];
+}
+
+export async function performBulkPostAction(ids: number[], action: BulkPostAction): Promise<BulkPostActionResult> {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id) && id > 0).map((id) => Math.trunc(id))));
+
+  if (!uniqueIds.length) {
+    return { successCount: 0, errors: [] };
+  }
+
+  const pool = getPool();
+  let connection: PoolConnection | null = null;
+
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const placeholders = uniqueIds.map(() => "?").join(", ");
+    const [rows] = await connection.query<IdLookupRow[]>(`SELECT id FROM posts WHERE id IN (${placeholders}) FOR UPDATE`, uniqueIds);
+
+    const existingIdSet = new Set<number>(rows.map((row) => row.id));
+    const missingIds = uniqueIds.filter((id) => !existingIdSet.has(id));
+    const targetIds = Array.from(existingIdSet);
+
+    if (targetIds.length > 0) {
+      const targetPlaceholders = targetIds.map(() => "?").join(", ");
+
+      if (action === "delete") {
+        await connection.query<ResultSetHeader>(`DELETE FROM posts WHERE id IN (${targetPlaceholders})`, targetIds);
+      } else {
+        const status: PostStatus = action === "publish" ? "published" : action === "draft" ? "draft" : "archived";
+
+        await connection.query<ResultSetHeader>(
+          `UPDATE posts SET
+            status = ?,
+            updated_at = NOW(),
+            published_at = CASE
+              WHEN ? = 'published' AND published_at IS NULL THEN NOW()
+              WHEN ? = 'draft' THEN NULL
+              ELSE published_at
+            END
+          WHERE id IN (${targetPlaceholders})`,
+          [status, status, status, ...targetIds],
+        );
+      }
+    }
+
+    await connection.commit();
+
+    return {
+      successCount: targetIds.length,
+      errors: missingIds.map((id) => ({
+        id,
+        message: `文章不存在（ID: ${id}）`,
+      })),
+    };
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Failed to rollback performBulkPostAction transaction", { error: rollbackError });
+      }
+    }
+
+    throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 }
 
 type AdminPostDetailRow = RowDataPacket & {
