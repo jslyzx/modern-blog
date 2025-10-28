@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 
+import ThemeToggle from "@/components/ThemeToggle";
 import { getSiteConfig } from "@/lib/site";
 
 type SiteLayoutProps = {
@@ -28,13 +29,14 @@ export default async function SiteLayout({ children }: SiteLayoutProps) {
             </Link>
             <p className="text-sm text-muted-foreground">{siteDescription}</p>
           </div>
-          <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+          <nav className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <Link href="/search" className="transition-colors hover:text-primary">
               Search
             </Link>
             <Link href="/rss" className="transition-colors hover:text-primary">
               RSS
             </Link>
+            <ThemeToggle className="ml-2" />
           </nav>
         </div>
       </header>
