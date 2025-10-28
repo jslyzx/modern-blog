@@ -8,6 +8,8 @@ import { PostContent } from "@/components/site/PostContent";
 import { ShareButtons } from "@/components/site/ShareButtons";
 import { RelatedPosts } from "@/components/site/RelatedPosts";
 import { TableOfContents } from "@/components/site/TableOfContents";
+import { PopularPostsWidget } from "@/components/site/PopularPostsWidget";
+import { PostViewTracker } from "@/components/site/PostViewTracker";
 import { htmlToPlainText, renderPostContent, truncateWords } from "@/lib/markdown";
 import { countTocItems, generateToc } from "@/lib/toc";
 import { buildPostPath } from "@/lib/paths";
@@ -247,6 +249,7 @@ export default async function PostPage({ params }: PostPageProps) {
 
   return (
     <main className="container mx-auto max-w-5xl px-4 py-12">
+      <PostViewTracker postId={post.id} />
       <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:gap-12">
         <article className="order-1 flex-1 prose prose-neutral max-w-none dark:prose-invert prose-pre:overflow-x-auto lg:order-2 lg:max-w-3xl">
           <header className="not-prose mb-8 border-b border-border pb-6">
@@ -301,6 +304,7 @@ export default async function PostPage({ params }: PostPageProps) {
           <TableOfContents className="order-3 w-full lg:order-3 lg:flex-none" items={tocItems} />
         ) : null}
       </div>
+      <PopularPostsWidget excludeIds={[post.id]} className="mt-12" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData, (_key, value) => value ?? undefined) }}

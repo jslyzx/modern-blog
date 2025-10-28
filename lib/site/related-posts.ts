@@ -24,6 +24,7 @@ interface RelatedPostRow extends RowDataPacket {
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
   isFeatured: number | null;
+  viewCount: number | string | bigint | null;
   authorId: number | null;
   authorName: string | null;
   authorEmail: string | null;
@@ -117,6 +118,8 @@ const mapRelatedPostRow = (row: RelatedPostRow): RelatedPostWithScore => {
   const authorName = normalizeNullableText(row.authorName);
   const authorEmail = normalizeNullableText(row.authorEmail);
   const sharedTagCount = Number(row.sharedTagCount ?? 0);
+  const rawViewCount = Number(row.viewCount ?? 0);
+  const viewCount = Number.isNaN(rawViewCount) ? 0 : Math.max(0, Math.trunc(rawViewCount));
 
   const post: PublishedPostSummary = {
     id: row.id,
@@ -132,6 +135,7 @@ const mapRelatedPostRow = (row: RelatedPostRow): RelatedPostWithScore => {
     updatedAt: toDate(row.updatedAt),
     createdAt: toDate(row.createdAt),
     isFeatured: Boolean(row.isFeatured),
+    viewCount,
     author: {
       id: authorId,
       name: authorName,
@@ -227,6 +231,7 @@ const fetchRelatedRows = async (postId: number, tagIds: number[], limit: number)
           p.updated_at AS updatedAt,
           p.created_at AS createdAt,
           p.is_featured AS isFeatured,
+          p.view_count AS viewCount,
           p.author_id AS authorId,
           u.username AS authorName,
           u.email AS authorEmail,
@@ -249,6 +254,7 @@ const fetchRelatedRows = async (postId: number, tagIds: number[], limit: number)
           p.updated_at,
           p.created_at,
           p.is_featured,
+          p.view_count,
           p.author_id,
           u.username,
           u.email
@@ -288,6 +294,7 @@ const fetchFallbackRows = async (postId: number, limit: number): Promise<Related
           p.updated_at AS updatedAt,
           p.created_at AS createdAt,
           p.is_featured AS isFeatured,
+          p.view_count AS viewCount,
           p.author_id AS authorId,
           u.username AS authorName,
           u.email AS authorEmail,
