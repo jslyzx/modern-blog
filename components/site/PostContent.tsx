@@ -6,6 +6,8 @@ import type { Element, Properties, Root, Text } from "hast";
 
 import { loadImageMetadata } from "@/lib/image-metadata";
 
+import { CodeCopyButton } from "./CodeCopyButton";
+
 const processor = unified().use(rehypeParse, { fragment: true });
 
 type HastNode = Root["children"][number];
@@ -151,6 +153,135 @@ const collectDataAttributes = (properties: Properties = {}): Record<string, unkn
   return data;
 };
 
+const extractTextContent = (node: HastNode): string => {
+  if (isTextNode(node)) {
+    return node.value;
+  }
+
+  if (isElementNode(node)) {
+    return (node.children ?? []).map((child) => extractTextContent(child)).join("");
+  }
+
+  const value = (node as { value?: unknown }).value;
+
+  return typeof value === "string" ? value : "";
+};
+
+const extractTextFromNodes = (nodes: HastNode[] = []): string => nodes.map((child) => extractTextContent(child)).join("");
+
+const stringifyClassName = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.length > 0).join(" ");
+  }
+
+  return "";
+};
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  bash: "Bash",
+  sh: "Shell",
+  shell: "Shell",
+  zsh: "Zsh",
+  js: "JavaScript",
+  javascript: "JavaScript",
+  jsx: "JSX",
+  ts: "TypeScript",
+  tsx: "TypeScript",
+  typescript: "TypeScript",
+  json: "JSON",
+  html: "HTML",
+  css: "CSS",
+  scss: "SCSS",
+  sass: "Sass",
+  less: "Less",
+  md: "Markdown",
+  markdown: "Markdown",
+  yaml: "YAML",
+  yml: "YAML",
+  graphql: "GraphQL",
+  py: "Python",
+  python: "Python",
+  rb: "Ruby",
+  go: "Go",
+  rust: "Rust",
+  java: "Java",
+  php: "PHP",
+  c: "C",
+  cpp: "C++",
+  "c++": "C++",
+  csharp: "C#",
+  cs: "C#",
+  swift: "Swift",
+  kotlin: "Kotlin",
+  dart: "Dart",
+  sql: "SQL",
+  docker: "Dockerfile",
+  dockerfile: "Dockerfile",
+  plaintext: "Plain text",
+  text: "Plain text",
+};
+
+const extractLanguageFromNode = (node: Element | null | undefined): string | null => {
+  if (!node) {
+    return null;
+  }
+
+  const properties = node.properties ?? {};
+
+  const direct =
+    ensureString(properties["data-language"]) ??
+    ensureString((properties as Record<string, unknown>).dataLanguage) ??
+    ensureString((properties as Record<string, unknown>).language) ??
+    ensureString((properties as Record<string, unknown>).lang);
+
+  if (direct) {
+    return direct;
+  }
+
+  const className = stringifyClassName(properties.className ?? properties.class);
+  const match = className.match(/(?:language|lang)-([a-z0-9+#-]+)/i);
+
+  if (match?.[1]) {
+    return match[1];
+  }
+
+  return null;
+};
+
+const formatLanguageLabel = (raw: string | null): string | null => {
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.toLowerCase();
+
+  if (Object.prototype.hasOwnProperty.call(LANGUAGE_LABELS, normalized)) {
+    return LANGUAGE_LABELS[normalized];
+  }
+
+  return raw
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => {
+      if (segment.length === 0) {
+        return segment;
+      }
+
+      const upper = segment.toUpperCase();
+
+      if (upper === "TSX" || upper === "JSX" || upper === "SQL") {
+        return upper;
+      }
+
+      return segment.charAt(0).toUpperCase() + segment.slice(1);
+    })
+    .join(" ");
+};
+
 const renderChildren = async (nodes: HastNode[] = [], keyPrefix: string): Promise<ReactNode[]> => {
   const rendered = await Promise.all(nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`)));
 
@@ -264,6 +395,29 @@ const renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {
 
   if (node.tagName === "img") {
     return renderImageElement(node, key);
+  }
+
+  if (node.tagName === "pre") {
+    const codeElement = node.children.find(
+      (child): child is Element => isElementNode(child) && child.tagName === "code",
+    );
+    const rawCode = extractTextFromNodes(codeElement?.children ?? node.children).replace(/\r\n/g, "\n");
+    const codeText = rawCode.endsWith("\n") ? rawCode.slice(0, -1) : rawCode;
+    const rawLanguage = extractLanguageFromNode(codeElement) ?? extractLanguageFromNode(node);
+    const language = formatLanguageLabel(rawLanguage);
+    const props = convertProperties(node.properties);
+    const children = await renderChildren(node.children, key);
+
+    return createElement(
+      "div",
+      { key, className: "relative" },
+      createElement(CodeCopyButton, {
+        code: codeText,
+        language,
+        className: "absolute right-3 top-3 z-10 sm:right-4 sm:top-4",
+      }),
+      createElement(node.tagName, { ...props }, ...children),
+    );
   }
 
   const props = convertProperties(node.properties);
