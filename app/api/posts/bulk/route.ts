@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import { isBulkPostAction, performBulkPostAction, type BulkPostAction } from "@/lib/admin/posts";
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 const parseIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) {
@@ -51,21 +52,21 @@ export async function POST(request: Request) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse bulk post action payload", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const actionValue = (payload as { action?: unknown })?.action;
   const idsValue = (payload as { ids?: unknown })?.ids;
 
   if (!isBulkPostAction(actionValue)) {
-    return NextResponse.json({ error: "操作类型无效" }, { status: 400 });
+    return apiErrors.badRequest("操作类型无效", "VALIDATION_ERROR");
   }
 
   const action = actionValue as BulkPostAction;
   const ids = parseIds(idsValue);
 
   if (!ids.length) {
-    return NextResponse.json({ error: "请选择要操作的文章" }, { status: 400 });
+    return apiErrors.badRequest("请选择要操作的文章", "VALIDATION_ERROR");
   }
 
   try {
@@ -78,6 +79,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Failed to perform bulk post action", { action, ids, error });
-    return NextResponse.json({ error: "批量操作失败" }, { status: 500 });
+    return apiErrors.internal("批量操作失败", "BULK_ACTION_FAILED");
   }
 }

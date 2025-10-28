@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import {
   deletePostById,
@@ -34,7 +35,7 @@ const parseId = (value: string | string[] | undefined): number | null => {
   return parsed;
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 const parseTagIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) {
@@ -80,20 +81,20 @@ export async function GET(_request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("文章 ID 无效", "INVALID_IDENTIFIER");
   }
 
   try {
     const post = await getPostById(postId);
 
     if (!post) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+      return apiErrors.notFound("未找到文章", "POST_NOT_FOUND");
     }
 
     return NextResponse.json({ post });
   } catch (error) {
     console.error("Failed to fetch post", { postId, error });
-    return NextResponse.json({ error: "获取文章失败" }, { status: 500 });
+    return apiErrors.internal("获取文章失败", "GET_POST_FAILED");
   }
 }
 
@@ -107,20 +108,20 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("文章 ID 无效", "INVALID_IDENTIFIER");
   }
 
   try {
     const deleted = await deletePostById(postId);
 
     if (!deleted) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+      return apiErrors.notFound("未找到文章", "POST_NOT_FOUND");
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete post", { postId, error });
-    return NextResponse.json({ error: "删除文章失败。" }, { status: 500 });
+    return apiErrors.internal("删除文章失败。", "DELETE_POST_FAILED");
   }
 }
 
@@ -134,7 +135,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("文章 ID 无效", "INVALID_IDENTIFIER");
   }
 
   let payload: unknown;
@@ -143,13 +144,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse PATCH body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const requestedStatus = (payload as { status?: unknown })?.status;
 
   if (typeof requestedStatus !== "string" || !isPostStatus(requestedStatus)) {
-    return NextResponse.json({ error: "状态无效" }, { status: 400 });
+    return apiErrors.badRequest("状态无效", "VALIDATION_ERROR");
   }
 
   const status = requestedStatus as PostStatus;
@@ -158,13 +159,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     const updated = await updatePostStatus(postId, status);
 
     if (!updated) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+      return apiErrors.notFound("未找到文章", "POST_NOT_FOUND");
     }
 
     return NextResponse.json({ success: true, status });
   } catch (error) {
     console.error("Failed to update post status", { postId, status, error });
-    return NextResponse.json({ error: "更新文章状态失败。" }, { status: 500 });
+    return apiErrors.internal("更新文章状态失败。", "UPDATE_POST_STATUS_FAILED");
   }
 }
 
@@ -178,7 +179,7 @@ export async function PUT(request: Request, context: RouteContext) {
   const postId = parseId(context.params.id);
 
   if (!postId) {
-    return NextResponse.json({ error: "文章 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("文章 ID 无效", "INVALID_IDENTIFIER");
   }
 
   let payload: unknown;
@@ -187,13 +188,13 @@ export async function PUT(request: Request, context: RouteContext) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse PUT body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const data = payload as any;
 
   if (!data.title || typeof data.title !== "string") {
-    return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
+    return apiErrors.badRequest("标题不能为空", "VALIDATION_ERROR");
   }
 
   try {
@@ -231,12 +232,12 @@ export async function PUT(request: Request, context: RouteContext) {
     );
 
     if (!updated) {
-      return NextResponse.json({ error: "未找到文章" }, { status: 404 });
+      return apiErrors.notFound("未找到文章", "POST_NOT_FOUND");
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to update post", { postId, error });
-    return NextResponse.json({ error: "更新文章失败" }, { status: 500 });
+    return apiErrors.internal("更新文章失败", "UPDATE_POST_FAILED");
   }
 }

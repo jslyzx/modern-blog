@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { apiErrors } from "@/lib/api/errors";
 import { auth } from "@/auth";
 import {
   deleteTag,
@@ -18,7 +19,7 @@ type RouteContext = {
   };
 };
 
-const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
+const unauthorized = () => apiErrors.unauthorized();
 
 const serializeTag = (tag: TagRecord) => ({
   id: tag.id,
@@ -55,20 +56,20 @@ export async function GET(_request: Request, context: RouteContext) {
   const tagId = parseId(context.params.id);
 
   if (!tagId) {
-    return NextResponse.json({ error: "标签 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("标签 ID 无效", "INVALID_IDENTIFIER");
   }
 
   try {
     const tag = await getTagById(tagId);
 
     if (!tag) {
-      return NextResponse.json({ error: "未找到标签" }, { status: 404 });
+      return apiErrors.notFound("未找到标签", "TAG_NOT_FOUND");
     }
 
     return NextResponse.json({ tag: serializeTag(tag) });
   } catch (error) {
     console.error("Failed to load tag", { tagId, error });
-    return NextResponse.json({ error: "获取标签失败" }, { status: 500 });
+    return apiErrors.internal("获取标签失败", "GET_TAG_FAILED");
   }
 }
 
@@ -82,7 +83,7 @@ export async function PUT(request: Request, context: RouteContext) {
   const tagId = parseId(context.params.id);
 
   if (!tagId) {
-    return NextResponse.json({ error: "标签 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("标签 ID 无效", "INVALID_IDENTIFIER");
   }
 
   let payload: unknown;
@@ -91,25 +92,25 @@ export async function PUT(request: Request, context: RouteContext) {
     payload = await request.json();
   } catch (error) {
     console.warn("Failed to parse PUT body", error);
-    return NextResponse.json({ error: "请求载荷无效" }, { status: 400 });
+    return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
   const rawName = (payload as { name?: unknown })?.name;
   const name = normalizeTagName(rawName ?? "");
 
   if (!name) {
-    return NextResponse.json({ error: "标签名称不能为空" }, { status: 400 });
+    return apiErrors.badRequest("标签名称不能为空", "VALIDATION_ERROR");
   }
 
   try {
     if (await isTagNameTaken(name, tagId)) {
-      return NextResponse.json({ error: "标签名称已存在" }, { status: 400 });
+      return apiErrors.badRequest("标签名称已存在", "DUPLICATE_TAG_NAME");
     }
 
     const tag = await updateTag(tagId, { name });
 
     if (!tag) {
-      return NextResponse.json({ error: "未找到标签" }, { status: 404 });
+      return apiErrors.notFound("未找到标签", "TAG_NOT_FOUND");
     }
 
     return NextResponse.json({ tag: serializeTag(tag) });
@@ -117,10 +118,10 @@ export async function PUT(request: Request, context: RouteContext) {
     console.error("Failed to update tag", { tagId, error });
 
     if (error instanceof Error && error.message.includes("already exists")) {
-      return NextResponse.json({ error: "标签名称已存在" }, { status: 400 });
+      return apiErrors.badRequest("标签名称已存在", "DUPLICATE_TAG_NAME");
     }
 
-    return NextResponse.json({ error: "更新标签失败" }, { status: 500 });
+    return apiErrors.internal("更新标签失败", "UPDATE_TAG_FAILED");
   }
 }
 
@@ -134,19 +135,19 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const tagId = parseId(context.params.id);
 
   if (!tagId) {
-    return NextResponse.json({ error: "标签 ID 无效" }, { status: 400 });
+    return apiErrors.badRequest("标签 ID 无效", "INVALID_IDENTIFIER");
   }
 
   try {
     const deleted = await deleteTag(tagId);
 
     if (!deleted) {
-      return NextResponse.json({ error: "未找到标签" }, { status: 404 });
+      return apiErrors.notFound("未找到标签", "TAG_NOT_FOUND");
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete tag", { tagId, error });
-    return NextResponse.json({ error: "删除标签失败" }, { status: 500 });
+    return apiErrors.internal("删除标签失败", "DELETE_TAG_FAILED");
   }
 }
