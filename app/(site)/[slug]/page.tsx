@@ -5,6 +5,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { PostContent } from "@/components/site/PostContent";
+import { RelatedPosts } from "@/components/site/RelatedPosts";
 import { TableOfContents } from "@/components/site/TableOfContents";
 import { htmlToPlainText, renderPostContent, truncateWords } from "@/lib/markdown";
 import { countTocItems, generateToc } from "@/lib/toc";
@@ -15,6 +16,7 @@ import {
   ensureAbsoluteUrlFromConfig,
   getSiteConfig,
 } from "@/lib/site";
+import { getRelatedPostsForPost } from "@/lib/site/related-posts";
 import {
   getPublishedPostBySlug,
   getPublishedPostSlugs,
@@ -184,7 +186,10 @@ const formatDate = (date: Date | null): string | null => {
 
 export default async function PostPage({ params }: PostPageProps) {
   const post = await loadPostOrRedirect(params.slug);
-  const site = await getSiteConfig();
+  const [site, relatedPosts] = await Promise.all([
+    getSiteConfig(),
+    getRelatedPostsForPost(post.id, { limit: 5 }),
+  ]);
 
   const canonicalHref = buildPostUrlFromConfig(site, post.slug);
   const canonicalUrl =
@@ -283,6 +288,7 @@ export default async function PostPage({ params }: PostPageProps) {
             </figure>
           ) : null}
           <PostContent html={html} className="contents" />
+          <RelatedPosts className="mt-12" posts={relatedPosts} />
         </article>
         {hasTableOfContents ? <TableOfContents items={tocItems} /> : null}
       </div>
