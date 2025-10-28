@@ -21,20 +21,20 @@ export type SiteSettingKey = (typeof SITE_SETTING_KEYS)[number];
 export type SettingsMap = Record<string, string | null>;
 
 interface SettingRow extends RowDataPacket {
-  key: string;
-  value: string | null;
+  k: string;
+  v: string | null;
 }
 
 const fetchAllSettings = async (): Promise<SettingsMap> => {
-  const rows = await query<SettingRow[]>("SELECT `key`, value FROM settings");
+  const rows = await query<SettingRow[]>("SELECT k, v FROM settings");
   const map: SettingsMap = {};
 
   for (const row of rows) {
-    if (typeof row.key !== "string" || !row.key) {
+    if (typeof row.k !== "string" || !row.k) {
       continue;
     }
 
-    map[row.key] = row.value ?? null;
+    map[row.k] = row.v ?? null;
   }
 
   return map;
@@ -69,9 +69,10 @@ export const isSiteSettingKey = (value: unknown): value is SiteSettingKey =>
 
 export const upsertSetting = async (key: string, value: string | null): Promise<void> => {
   if (value === null) {
-    await query<ResultSetHeader>("DELETE FROM settings WHERE `key` = ?", [key]);
+    await query<ResultSetHeader>("DELETE FROM settings WHERE `k` = ?", [key]);
+    
   } else {
-    await query<ResultSetHeader>("REPLACE INTO settings (`key`, value) VALUES (?, ?)", [key, value]);
+    await query<ResultSetHeader>("REPLACE INTO settings (`k`, `v`) VALUES (?, ?)", [key, value]);
   }
 
   await revalidateTag(SETTINGS_CACHE_TAG);
