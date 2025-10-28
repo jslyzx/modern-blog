@@ -45,6 +45,20 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     alternates: {
       canonical: canonicalUrl,
+      types: {
+        "application/rss+xml": [
+          {
+            url: "/rss",
+            title: `${site.siteName} RSS`,
+          },
+        ],
+        "application/feed+json": [
+          {
+            url: "/feed.json",
+            title: `${site.siteName} JSON Feed`,
+          },
+        ],
+      },
     },
   };
 }
@@ -71,11 +85,13 @@ const themeInitScript = `(() => {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}
         </Script>
+        <link rel="alternate" type="application/rss+xml" href="/rss" />
+        <link rel="alternate" type="application/feed+json" href="/feed.json" />
       </head>
       <body className={cn("min-h-screen bg-background font-sans antialiased")}>
         <ThemeProvider>
