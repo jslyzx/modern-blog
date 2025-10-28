@@ -425,7 +425,10 @@ const createMarkdownProcessor = () =>
     .use(rehypeRaw)
     .use(rehypeKatex)
     .use(rehypePrettyCode, {
-      theme: "github-dark",
+      theme: {
+        light: "github-light",
+        dark: "github-dark",
+      },
       keepBackground: false,
     })
     .use(headingIdPlugin)
@@ -436,7 +439,10 @@ const createHtmlProcessor = () =>
     .use(rehypeParse, { fragment: true })
     .use(rehypeKatex)
     .use(rehypePrettyCode, {
-      theme: "github-dark",
+      theme: {
+        light: "github-light",
+        dark: "github-dark",
+      },
       keepBackground: false,
     })
     .use(headingIdPlugin)

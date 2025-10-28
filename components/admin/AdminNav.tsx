@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import ThemeToggle from "@/components/ThemeToggle";
 import { LogoutButton } from "@/components/logout-button";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +91,8 @@ export default function AdminNav({ userLabel }: AdminNavProps) {
           );
         })}
       </nav>
-      <div className="border-t px-6 py-4">
+      <div className="border-t px-6 py-4 space-y-3">
+        <ThemeToggle />
         <LogoutButton />
       </div>
     </aside>
