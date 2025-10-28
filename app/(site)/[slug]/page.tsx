@@ -5,6 +5,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { PostContent } from "@/components/site/PostContent";
+import { ShareButtons } from "@/components/site/ShareButtons";
 import { TableOfContents } from "@/components/site/TableOfContents";
 import { htmlToPlainText, renderPostContent, truncateWords } from "@/lib/markdown";
 import { countTocItems, generateToc } from "@/lib/toc";
@@ -213,11 +214,12 @@ export default async function PostPage({ params }: PostPageProps) {
   const plainTextContent = htmlToPlainText(html);
   const summary = post.summary?.trim();
   const siteName = site.siteName;
+  const shareSummary = summary || truncateWords(plainTextContent, 40) || site.siteDescription;
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: post.title,
-    description: summary || truncateWords(plainTextContent, 40) || site.siteDescription,
+    description: shareSummary,
     datePublished: post.publishedAt?.toISOString(),
     dateModified: (post.updatedAt ?? post.publishedAt)?.toISOString(),
     image: coverImage ? [coverImage] : [ogImage],
@@ -241,8 +243,7 @@ export default async function PostPage({ params }: PostPageProps) {
   return (
     <main className="container mx-auto max-w-5xl px-4 py-12">
       <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:gap-12">
-        {hasTableOfContents ? <TableOfContents className="order-1 lg:order-2" items={tocItems} /> : null}
-        <article className="prose prose-neutral max-w-none flex-1 order-2 dark:prose-invert prose-pre:overflow-x-auto lg:order-1 lg:max-w-3xl">
+        <article className="order-1 flex-1 prose prose-neutral max-w-none dark:prose-invert prose-pre:overflow-x-auto lg:order-2 lg:max-w-3xl">
           <header className="not-prose mb-8 border-b border-border pb-6">
             <h1 className="text-4xl font-semibold tracking-tight text-foreground">{post.title}</h1>
             {publishedLabel ? (
@@ -284,7 +285,15 @@ export default async function PostPage({ params }: PostPageProps) {
           ) : null}
           <PostContent html={html} className="contents" />
         </article>
-        {hasTableOfContents ? <TableOfContents items={tocItems} /> : null}
+        <ShareButtons
+          className="order-2 w-full lg:order-1 lg:w-auto lg:flex-none"
+          title={post.title}
+          url={canonicalUrl}
+          summary={shareSummary}
+        />
+        {hasTableOfContents ? (
+          <TableOfContents className="order-3 w-full lg:order-3 lg:flex-none" items={tocItems} />
+        ) : null}
       </div>
       <script
         type="application/ld+json"
