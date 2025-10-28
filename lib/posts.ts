@@ -7,6 +7,10 @@ import { loadImageMetadata, type LoadedImageMetadata } from "@/lib/image-metadat
 const PUBLISHED_POST_CONDITION = "p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
 const META_DESCRIPTION_MAX_LENGTH = 160;
 
+const KNOWN_POST_STATUSES = ["draft", "published", "archived"] as const;
+type KnownPostStatus = (typeof KNOWN_POST_STATUSES)[number];
+const KNOWN_POST_STATUS_SET = new Set<string>(KNOWN_POST_STATUSES);
+
 interface PostRow extends RowDataPacket {
   id: number;
   slug: string | null;
@@ -22,6 +26,7 @@ interface PostRow extends RowDataPacket {
   authorId: number | null;
   authorName: string | null;
   authorEmail: string | null;
+  status?: string | null;
 }
 
 interface TagRow extends RowDataPacket {
@@ -71,6 +76,10 @@ export interface PublishedPostSummary {
 
 export interface PublishedPost extends PublishedPostSummary {
   tags: PublishedTag[];
+}
+
+export interface PreviewPost extends PublishedPost {
+  status: KnownPostStatus | null;
 }
 
 const toDate = (value: Date | string | null): Date | null => {
@@ -173,7 +182,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
   };
 };
 
-const POSTS_SELECT = `
+const BASE_POSTS_SELECT = `
   SELECT
     p.id,
     p.slug,
@@ -188,10 +197,15 @@ const POSTS_SELECT = `
     p.is_featured AS isFeatured,
     p.author_id AS authorId,
     u.username AS authorName,
-    u.email AS authorEmail
+    u.email AS authorEmail,
+    p.status AS status
   FROM posts p
   LEFT JOIN users u ON u.id = p.author_id
-  WHERE ${PUBLISHED_POST_CONDITION}
+`;
+
+const POSTS_SELECT = `
+${BASE_POSTS_SELECT}
+WHERE ${PUBLISHED_POST_CONDITION}
 `;
 
 const enrichCoverImageMetadata = async (posts: PublishedPostSummary[]): Promise<void> => {
@@ -300,73 +314,119 @@ export const getFeaturedPublishedPosts = async (
   return posts;
 };
 
-export const getTagsForPublishedPosts = async (
-  postIds: ReadonlyArray<number> = [],
-): Promise<Map<number, PublishedTag[]>> => {
-  const sanitizedIds = Array.from(
+const sanitizePostIds = (postIds: ReadonlyArray<number>): number[] =>
+  Array.from(
     new Set(
       postIds
         .filter((value) => typeof value === "number" && Number.isFinite(value))
-        .map((value) => Math.max(0, Math.floor(value))),
+        .map((value) => Math.max(0, Math.trunc(value))),
     ),
   ).filter((value) => value > 0);
+
+interface FetchTagsForPostsOptions {
+  includeAllStatuses?: boolean;
+}
+
+const fetchTagsForPosts = async (
+  sanitizedIds: number[],
+  options: FetchTagsForPostsOptions = {},
+): Promise<Map<number, PublishedTag[]>> => {
+  if (!sanitizedIds.length) {
+    return new Map();
+  }
+
+  const whereConditions = ["pt.post_id IN (?)"];
+
+  if (!options.includeAllStatuses) {
+    whereConditions.push(PUBLISHED_POST_CONDITION);
+  }
+
+  const whereClause = whereConditions.join("\n          AND ");
+
+  const rows = await query<PostTagsRow[]>(
+    `
+      SELECT
+        pt.post_id AS postId,
+        t.id AS tagId,
+        t.slug AS tagSlug,
+        t.name AS tagName,
+        MAX(p.updated_at) AS lastUpdated
+      FROM post_tags pt
+      INNER JOIN tags t ON t.id = pt.tag_id
+      INNER JOIN posts p ON p.id = pt.post_id
+      WHERE ${whereClause}
+      GROUP BY pt.post_id, t.id, t.slug, t.name
+      ORDER BY t.name ASC
+    `,
+    [sanitizedIds],
+  );
+
+  const tagsByPost = new Map<number, PublishedTag[]>();
+
+  for (const row of rows) {
+    if (typeof row.postId !== "number" || typeof row.tagId !== "number") {
+      continue;
+    }
+
+    const name = normalizeNullableText(row.tagName);
+
+    if (!name) {
+      continue;
+    }
+
+    const tag: PublishedTag = {
+      id: row.tagId,
+      slug: row.tagSlug?.trim() ?? "",
+      name,
+      updatedAt: toDate(row.lastUpdated),
+    };
+
+    const existing = tagsByPost.get(row.postId);
+
+    if (existing) {
+      existing.push(tag);
+    } else {
+      tagsByPost.set(row.postId, [tag]);
+    }
+  }
+
+  return tagsByPost;
+};
+
+export const getTagsForPublishedPosts = async (
+  postIds: ReadonlyArray<number> = [],
+): Promise<Map<number, PublishedTag[]>> => {
+  const sanitizedIds = sanitizePostIds(postIds);
 
   if (!sanitizedIds.length) {
     return new Map();
   }
 
   try {
-    const rows = await query<PostTagsRow[]>(
-      `
-        SELECT
-          pt.post_id AS postId,
-          t.id AS tagId,
-          t.slug AS tagSlug,
-          t.name AS tagName,
-          MAX(p.updated_at) AS lastUpdated
-        FROM post_tags pt
-        INNER JOIN tags t ON t.id = pt.tag_id
-        INNER JOIN posts p ON p.id = pt.post_id
-        WHERE pt.post_id IN (?)
-          AND ${PUBLISHED_POST_CONDITION}
-        GROUP BY pt.post_id, t.id, t.slug, t.name
-        ORDER BY t.name ASC
-      `,
-      [sanitizedIds],
-    );
-
-    const tagsByPost = new Map<number, PublishedTag[]>();
-
-    for (const row of rows) {
-      if (typeof row.postId !== "number" || typeof row.tagId !== "number") {
-        continue;
-      }
-
-      const name = normalizeNullableText(row.tagName);
-
-      if (!name) {
-        continue;
-      }
-
-      const tag: PublishedTag = {
-        id: row.tagId,
-        slug: row.tagSlug?.trim() ?? "",
-        name,
-        updatedAt: toDate(row.lastUpdated),
-      };
-
-      const existing = tagsByPost.get(row.postId);
-
-      if (existing) {
-        existing.push(tag);
-      } else {
-        tagsByPost.set(row.postId, [tag]);
-      }
-    }
-
-    return tagsByPost;
+    return await fetchTagsForPosts(sanitizedIds);
   } catch (error) {
-    console.warn("Failed to load tags for posts", {
+    console.warn("Failed to load tags for published posts", {
+      postIds: sanitizedIds,
+      error,
+    });
+
+    return new Map();
+  }
+};
+
+const getTagsForPostsAnyStatus = async (
+  postIds: ReadonlyArray<number> = [],
+): Promise<Map<number, PublishedTag[]>> => {
+  const sanitizedIds = sanitizePostIds(postIds);
+
+  if (!sanitizedIds.length) {
+    return new Map();
+  }
+
+  try {
+    return await fetchTagsForPosts(sanitizedIds, { includeAllStatuses: true });
+  } catch (error) {
+    console.warn("Failed to load tags for posts regardless of status", {
       postIds: sanitizedIds,
       error,
     });
@@ -391,6 +451,12 @@ const getTagsForPost = async (postId: number): Promise<PublishedTag[]> => {
   return tagsByPost.get(postId) ?? [];
 };
 
+const getTagsForPostAnyStatus = async (postId: number): Promise<PublishedTag[]> => {
+  const tagsByPost = await getTagsForPostsAnyStatus([postId]);
+
+  return tagsByPost.get(postId) ?? [];
+};
+
 export const getPublishedPostBySlug = async (slug: string): Promise<PublishedPost | null> => {
   const rows = await query<PostRow[]>(`${POSTS_SELECT} AND p.slug = ? LIMIT 1`, [slug]);
 
@@ -405,6 +471,38 @@ export const getPublishedPostBySlug = async (slug: string): Promise<PublishedPos
   return {
     ...post,
     tags,
+  };
+};
+
+export const getPostByIdForPreview = async (id: number): Promise<PreviewPost | null> => {
+  if (typeof id !== "number" || !Number.isFinite(id)) {
+    return null;
+  }
+
+  const normalizedId = Math.trunc(id);
+
+  if (normalizedId <= 0) {
+    return null;
+  }
+
+  const rows = await query<PostRow[]>(`${BASE_POSTS_SELECT} WHERE p.id = ? LIMIT 1`, [normalizedId]);
+
+  if (!rows.length) {
+    return null;
+  }
+
+  const row = rows[0];
+  const post = mapPostRow(row);
+  post.coverImageMetadata = await loadImageMetadata(post.coverImageUrl);
+  const tags = await getTagsForPostAnyStatus(post.id);
+
+  const rawStatus = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
+  const status = rawStatus && KNOWN_POST_STATUS_SET.has(rawStatus) ? (rawStatus as KnownPostStatus) : null;
+
+  return {
+    ...post,
+    tags,
+    status,
   };
 };
 
