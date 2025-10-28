@@ -68,20 +68,28 @@ export async function POST(request: Request) {
     const slug = await ensureUniquePostSlug(slugCandidate);
 
     const contentHtml = typeof data.contentHtml === "string" ? data.contentHtml : typeof data.content === "string" ? data.content : "";
+    const contentMd =
+      typeof data.contentMd === "string"
+        ? data.contentMd
+        : typeof data.contentMarkdown === "string"
+          ? data.contentMarkdown
+          : null;
     const isFeatured = typeof data.isFeatured === "boolean" ? data.isFeatured : Boolean(data.featured);
     const allowComments = Boolean(data.allowComments ?? true);
     const tagIds = parseTagIds(data.tagIds ?? data.tags);
+    const authorId = Number.parseInt(session.user.id, 10);
 
     const postId = await createPost({
       title: data.title,
       slug,
       summary: typeof data.summary === "string" ? data.summary : "",
       contentHtml,
+      contentMd,
       coverImageUrl: typeof data.coverImageUrl === "string" ? data.coverImageUrl : "",
       status: (data.status || "draft") as PostStatus,
       isFeatured,
       allowComments,
-      authorId: parseInt(session.user.id, 10),
+      authorId,
       tagIds,
     });
 
