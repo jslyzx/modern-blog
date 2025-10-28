@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
         hostname: "gips3.baidu.com",
       },
     ],
+    formats: ["image/webp"],
   },
   reactStrictMode: true,
   eslint: {

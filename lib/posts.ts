@@ -2,6 +2,7 @@ import type { RowDataPacket } from "mysql2";
 
 import { query } from "@/lib/db";
 import { htmlToPlainText } from "@/lib/markdown";
+import { loadImageMetadata, type LoadedImageMetadata } from "@/lib/image-metadata";
 
 const PUBLISHED_POST_CONDITION = "p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
 const META_DESCRIPTION_MAX_LENGTH = 160;
@@ -49,6 +50,7 @@ export interface PublishedPostSummary {
   summary: string | null;
   metaDescription: string | null;
   coverImageUrl: string | null;
+  coverImageMetadata: LoadedImageMetadata | null;
   contentHtml: string;
   contentMd: string | null;
   publishedAt: Date | null;
@@ -134,6 +136,7 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
   const metaDescription = deriveMetaDescription(summary, contentHtml);
   const rawSlug = (row.slug ?? "").trim();
   const slug = rawSlug.replace(/^\/+/, "");
+  const coverImageUrl = normalizeNullableText(row.coverImageUrl);
 
   return {
     id: row.id,
@@ -141,7 +144,8 @@ const mapPostRow = (row: PostRow): PublishedPostSummary => {
     title: row.title,
     summary,
     metaDescription,
-    coverImageUrl: row.coverImageUrl ?? null,
+    coverImageUrl,
+    coverImageMetadata: null,
     contentHtml,
     contentMd,
     publishedAt: toDate(row.publishedAt),
@@ -167,6 +171,20 @@ const POSTS_SELECT = `
   FROM posts p
   WHERE ${PUBLISHED_POST_CONDITION}
 `;
+
+const enrichCoverImageMetadata = async (posts: PublishedPostSummary[]): Promise<void> => {
+  await Promise.all(
+    posts.map(async (post) => {
+      if (!post.coverImageUrl) {
+        post.coverImageMetadata = null;
+        return;
+      }
+
+      const metadata = await loadImageMetadata(post.coverImageUrl);
+      post.coverImageMetadata = metadata;
+    }),
+  );
+};
 
 export interface GetPublishedPostsOptions {
   limit?: number;
@@ -218,7 +236,10 @@ export const getPublishedPosts = async (
 
   const rows = await query<PostRow[]>(sql, params);
 
-  return rows.map(mapPostRow);
+  const posts = rows.map(mapPostRow);
+  await enrichCoverImageMetadata(posts);
+
+  return posts;
 };
 
 export const getPublishedPostsCount = async (): Promise<number> => {
@@ -251,7 +272,10 @@ export const getFeaturedPublishedPosts = async (
     [sanitizedLimit],
   );
 
-  return rows.map(mapPostRow);
+  const posts = rows.map(mapPostRow);
+  await enrichCoverImageMetadata(posts);
+
+  return posts;
 };
 
 export const getTagsForPublishedPosts = async (
@@ -353,6 +377,7 @@ export const getPublishedPostBySlug = async (slug: string): Promise<PublishedPos
   }
 
   const post = mapPostRow(rows[0]);
+  post.coverImageMetadata = await loadImageMetadata(post.coverImageUrl);
   const tags = await getTagsForPost(post.id);
 
   return {

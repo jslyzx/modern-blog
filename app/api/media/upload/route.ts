@@ -3,10 +3,9 @@ import formidable, { errors as formidableErrors, type File as FormidableFile } f
 import type { IncomingMessage } from "node:http";
 import { promises as fs } from "node:fs/promises";
 import { Readable } from "node:stream";
-import sharp from "sharp";
 
 import { auth } from "@/auth";
-import { LocalMediaStorage } from "@/lib/media";
+import { LocalMediaStorage, isSvgMimeType } from "@/lib/media";
 import { MAX_FILE_SIZE_BYTES, allowedImageMimeTypes } from "@/lib/media-config";
 
 const storage = new LocalMediaStorage();
@@ -32,67 +31,6 @@ const cleanupTempFile = async (filepath: string | undefined) => {
 };
 
 const unauthorized = () => NextResponse.json({ error: "未授权" }, { status: 401 });
-
-const isSvgMimeType = (mimeType: string | null | undefined) => mimeType === "image/svg+xml";
-
-const parseSvgDimensions = async (filepath: string) => {
-  try {
-    const contents = await fs.readFile(filepath, "utf8");
-    const widthMatch = contents.match(/width="([0-9.]+)(px)?"/i);
-    const heightMatch = contents.match(/height="([0-9.]+)(px)?"/i);
-
-    if (widthMatch && heightMatch) {
-      const width = Number.parseFloat(widthMatch[1]);
-      const height = Number.parseFloat(heightMatch[1]);
-
-      if (Number.isFinite(width) && Number.isFinite(height)) {
-        return {
-          width,
-          height,
-        };
-      }
-    }
-
-    const viewBoxMatch = contents.match(/viewBox="([0-9.\s-]+)"/i);
-
-    if (viewBoxMatch) {
-      const [, viewBox] = viewBoxMatch;
-      const segments = viewBox.trim().split(/\s+/).map((segment) => Number.parseFloat(segment));
-
-      if (segments.length === 4 && segments.every((value) => Number.isFinite(value))) {
-        return {
-          width: segments[2],
-          height: segments[3],
-        };
-      }
-    }
-  } catch (error) {
-    console.warn("Failed to parse SVG dimensions", error);
-  }
-
-  return { width: null, height: null };
-};
-
-const extractImageMetadata = async (filepath: string, mimeType: string | null | undefined) => {
-  if (!mimeType) {
-    return { width: null, height: null };
-  }
-
-  if (isSvgMimeType(mimeType)) {
-    return parseSvgDimensions(filepath);
-  }
-
-  try {
-    const metadata = await sharp(filepath).metadata();
-    return {
-      width: metadata.width ?? null,
-      height: metadata.height ?? null,
-    };
-  } catch (error) {
-    console.warn("Failed to read image metadata", error);
-    return { width: null, height: null };
-  }
-};
 
 const UNSAFE_SVG_CONTENT_PATTERN = /<\s*script|<\s*foreignobject|on[a-z]+\s*=|javascript:|data:text\//i;
 
@@ -226,17 +164,19 @@ export async function POST(request: NextRequest) {
       mimetype: file.mimetype,
     });
 
-    const metadata = await extractImageMetadata(result.storagePath, result.mimeType);
-
     parsedFile = null;
 
     return NextResponse.json(
       {
         url: result.url,
-        width: metadata.width,
-        height: metadata.height,
+        width: result.width,
+        height: result.height,
         mimeType: result.mimeType,
         sizeBytes: result.sizeBytes,
+        blurDataUrl: result.blurDataUrl,
+        webpUrl: result.webp?.url ?? null,
+        webpMimeType: result.webp?.mimeType ?? null,
+        webpSizeBytes: result.webp?.sizeBytes ?? null,
       },
       { status: 201 },
     );
