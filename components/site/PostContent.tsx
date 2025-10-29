@@ -438,6 +438,18 @@ export async function PostContent({ html, className }: PostContentProps) {
     return null;
   }
 
+  // 检查是否包含数学公式相关的标签或符号
+  const containsMath = normalized.includes("math") || 
+                       normalized.includes("katex") || 
+                       normalized.includes("$$") || 
+                       normalized.includes("$");
+
+  // 如果包含数学公式，直接使用dangerouslySetInnerHTML以确保正确渲染
+  if (containsMath) {
+    return <div className={className} dangerouslySetInnerHTML={{ __html: normalized }} />;
+  }
+
+  // 对于不包含数学公式的内容，使用原有的解析方式
   const root = processor.parse(normalized) as Root;
   const children = await renderChildren(root.children, "node");
 

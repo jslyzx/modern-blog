@@ -217,7 +217,7 @@ const buildRevisionSelectColumns = (
   const columns: string[] = [
     "r.id AS id",
     "r.post_id AS post_id",
-    "r.editor_id AS editor_id",
+    ...(capabilities.hasEditorId ? ["r.editor_id AS editor_id"] : []),
     "r.created_at AS created_at",
   ];
 
@@ -273,7 +273,7 @@ const buildRevisionSelectColumns = (
     columns.push(`r.${capabilities.diffSummaryColumn} AS diff_summary`);
   }
 
-  if (options.includeEditor) {
+  if (options.includeEditor && capabilities.hasEditorId) {
     columns.push("u.username AS editor_username");
     columns.push("u.email AS editor_email");
   }
@@ -573,7 +573,7 @@ export interface PostRevisionSummary {
   createdAt: string | null;
   diffSummary: string | null;
   isLatest: boolean;
-  editor: PostRevisionEditor;
+  editor?: PostRevisionEditor;
 }
 
 export interface PostRevisionDetail extends PostRevisionSummary {
@@ -607,10 +607,12 @@ export const getPostRevisions = async (postId: number): Promise<PostRevisionSumm
     includeEditor: true,
   });
 
+  const joinClause = capabilities.hasEditorId ? "LEFT JOIN users u ON u.id = r.editor_id" : "";
+  
   const rows = await query<PostRevisionRow[]>(
     `SELECT ${selectColumns}
      FROM post_revisions r
-     LEFT JOIN users u ON u.id = r.editor_id
+     ${joinClause}
      WHERE r.post_id = ?
      ORDER BY r.created_at DESC, r.id DESC`,
     [postId],
@@ -626,19 +628,24 @@ export const getPostRevisions = async (postId: number): Promise<PostRevisionSumm
     const fallbackNumber = total - index;
     const revisionNumber = parseNumeric(row.revision_number ?? null) ?? fallbackNumber;
 
-    return {
+    const result: PostRevisionSummary = {
       id: row.id,
       postId: row.post_id,
       revisionNumber,
       createdAt: toIsoString(row.created_at),
       diffSummary: normalizeText(row.diff_summary ?? null),
       isLatest: index === 0,
-      editor: {
+    };
+    
+    if (capabilities.hasEditorId) {
+      result.editor = {
         id: typeof row.editor_id === "number" ? row.editor_id : null,
         name: row.editor_username ?? null,
         email: row.editor_email ?? null,
-      },
-    } satisfies PostRevisionSummary;
+      };
+    }
+    
+    return result;
   });
 };
 
@@ -652,10 +659,12 @@ export const getPostRevisionById = async (
     includeEditor: true,
   });
 
+  const joinClause = capabilities.hasEditorId ? "LEFT JOIN users u ON u.id = r.editor_id" : "";
+  
   const rows = await query<PostRevisionRow[]>(
     `SELECT ${selectColumns}
      FROM post_revisions r
-     LEFT JOIN users u ON u.id = r.editor_id
+     ${joinClause}
      WHERE r.post_id = ? AND r.id = ?
      LIMIT 1`,
     [postId, revisionId],
@@ -684,15 +693,18 @@ export const getPostRevisionById = async (
     createdAt: toIsoString(row.created_at),
     diffSummary: normalizeText(row.diff_summary ?? null),
     isLatest: revisionNumber === totalCount,
-    editor: {
-      id: typeof row.editor_id === "number" ? row.editor_id : null,
-      name: row.editor_username ?? null,
-      email: row.editor_email ?? null,
-    },
     contentHtml,
     contentMd,
     totalCount,
   };
+  
+  if (capabilities.hasEditorId) {
+    detail.editor = {
+      id: typeof row.editor_id === "number" ? row.editor_id : null,
+      name: row.editor_username ?? null,
+      email: row.editor_email ?? null,
+    };
+  }
 
   if (capabilities.hasTitle) {
     detail.title = row.title ?? null;

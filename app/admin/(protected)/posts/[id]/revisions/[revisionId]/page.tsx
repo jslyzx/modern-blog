@@ -76,7 +76,7 @@ export default async function PostRevisionDetailPage({ params }: RevisionDetailP
     notFound();
   }
 
-  const editorLabel = revision.editor.name ?? revision.editor.email ?? "系统";
+  const editorLabel = revision.editor?.name ?? revision.editor?.email ?? "系统";
   const formattedDate = formatDateTime(revision.createdAt);
   const canRestore = !revision.isLatest;
   const summaryText = hasContent(revision.summary) ? revision.summary?.trim() ?? "" : null;

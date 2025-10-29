@@ -94,7 +94,7 @@ export default async function PostRevisionsPage({ params }: RevisionsPageProps) 
             </TableHeader>
             <TableBody>
               {revisions.map((revision) => {
-                const editorName = revision.editor.name ?? revision.editor.email ?? "系统";
+                const editorName = revision.editor?.name ?? revision.editor?.email ?? "系统";
 
                 return (
                   <TableRow key={revision.id} className={cn(revision.isLatest && "bg-muted/60")}>
