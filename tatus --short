@@ -1,0 +1,173 @@
+[1mdiff --git a/components/site/PostContent.tsx b/components/site/PostContent.tsx[m
+[1mindex c236b76..f447b8b 100644[m
+[1m--- a/components/site/PostContent.tsx[m
+[1m+++ b/components/site/PostContent.tsx[m
+[36m@@ -1,8 +1,9 @@[m
+ import Image, { type ImageProps } from "next/image";[m
+[31m-import { createElement, type CSSProperties, type ReactNode } from "react";[m
+[32m+[m[32mimport { createElement, Fragment, type CSSProperties, type ReactNode } from "react";[m
+ import { unified } from "unified";[m
+ import rehypeParse from "rehype-parse";[m
+ import type { Element, Properties, Root, Text } from "hast";[m
+[32m+[m[32mimport { BlockMath, InlineMath } from "react-katex";[m
+ [m
+ import { loadImageMetadata } from "@/lib/image-metadata";[m
+ [m
+[36m@@ -15,6 +16,13 @@[m [mtype HastNode = Root["children"][number];[m
+ const DEFAULT_IMAGE_WIDTH = 1200;[m
+ const DEFAULT_IMAGE_HEIGHT = 675;[m
+ [m
+[32m+[m[32mtype RenderContext = {[m
+[32m+[m[32m  insideCode: boolean;[m
+[32m+[m[32m};[m
+[32m+[m
+[32m+[m[32mconst MATH_EXPRESSION_PATTERN =[m
+[32m+[m[32m  /(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$|(?<!\\)\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)/g;[m
+[32m+[m
+ const isElementNode = (node: HastNode): node is Element => node.type === "element";[m
+ const isTextNode = (node: HastNode): node is Text => node.type === "text";[m
+ [m
+[36m@@ -282,8 +290,78 @@[m [mconst formatLanguageLabel = (raw: string | null): string | null => {[m
+     .join(" ");[m
+ };[m
+ [m
+[31m-const renderChildren = async (nodes: HastNode[] = [], keyPrefix: string): Promise<ReactNode[]> => {[m
+[31m-  const rendered = await Promise.all(nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`)));[m
+[32m+[m[32mconst renderTextWithMath = (value: string, key: string): ReactNode => {[m
+[32m+[m[32m  if (!value) {[m
+[32m+[m[32m    return value;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (value.indexOf("$") === -1) {[m
+[32m+[m[32m    return value.includes("\\$") ? value.replace(/\\\$/g, "$") : value;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  MATH_EXPRESSION_PATTERN.lastIndex = 0;[m
+[32m+[m
+[32m+[m[32m  const parts: ReactNode[] = [];[m
+[32m+[m[32m  let lastIndex = 0;[m
+[32m+[m[32m  let match: RegExpExecArray | null;[m
+[32m+[m
+[32m+[m[32m  while ((match = MATH_EXPRESSION_PATTERN.exec(value)) !== null) {[m
+[32m+[m[32m    if (match.index > lastIndex) {[m
+[32m+[m[32m      const text = value.slice(lastIndex, match.index);[m
+[32m+[m[32m      if (text) {[m
+[32m+[m[32m        parts.push(text.includes("\\$") ? text.replace(/\\\$/g, "$") : text);[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const [, blockExpression, inlineExpression] = match;[m
+[32m+[m[32m    const expression = blockExpression ?? inlineExpression;[m
+[32m+[m
+[32m+[m[32m    if (typeof expression === "string" && expression.trim().length > 0) {[m
+[32m+[m[32m      const math = expression.trim();[m
+[32m+[m[32m      const mathKey = `${key}-math-${parts.length}`;[m
+[32m+[m
+[32m+[m[32m      if (blockExpression !== undefined) {[m
+[32m+[m[32m        parts.push(createElement(BlockMath, { key: mathKey, math }));[m
+[32m+[m[32m      } else {[m
+[32m+[m[32m        parts.push(createElement(InlineMath, { key: mathKey, math }));[m
+[32m+[m[32m      }[m
+[32m+[m[32m    } else {[m
+[32m+[m[32m      const raw = match[0];[m
+[32m+[m[32m      if (raw) {[m
+[32m+[m[32m        parts.push(raw.includes("\\$") ? raw.replace(/\\\$/g, "$") : raw);[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    lastIndex = match.index + match[0].length;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (lastIndex < value.length) {[m
+[32m+[m[32m    const trailing = value.slice(lastIndex);[m
+[32m+[m[32m    if (trailing) {[m
+[32m+[m[32m      parts.push(trailing.includes("\\$") ? trailing.replace(/\\\$/g, "$") : trailing);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (parts.length === 0) {[m
+[32m+[m[32m    const fallback = value.includes("\\$") ? value.replace(/\\\$/g, "$") : value;[m
+[32m+[m[32m    return fallback.length > 0 ? fallback : null;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (parts.length === 1) {[m
+[32m+[m[32m    return parts[0];[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return createElement(Fragment, { key }, ...parts);[m
+[32m+[m[32m};[m
+[32m+[m
+[32m+[m[32mconst renderChildren = async ([m
+[32m+[m[32m  nodes: HastNode[] = [],[m
+[32m+[m[32m  keyPrefix: string,[m
+[32m+[m[32m  context: RenderContext,[m
+[32m+[m[32m): Promise<ReactNode[]> => {[m
+[32m+[m[32m  const rendered = await Promise.all([m
+[32m+[m[32m    nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`, context)),[m
+[32m+[m[32m  );[m
+ [m
+   return rendered.filter((child): child is React.ReactElement | string | number => child !== null && child !== undefined);[m
+ };[m
+[36m@@ -384,9 +462,13 @@[m [mconst renderImageElement = async (node: Element, key: string): Promise<ReactNode[m
+   return <Image key={key} {...imageProps} />;[m
+ };[m
+ [m
+[31m-const renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {[m
+[32m+[m[32mconst renderNode = async (node: HastNode, key: string, context: RenderContext): Promise<ReactNode> => {[m
+   if (isTextNode(node)) {[m
+[31m-    return node.value;[m
+[32m+[m[32m    if (context.insideCode) {[m
+[32m+[m[32m      return node.value;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return renderTextWithMath(node.value, key);[m
+   }[m
+ [m
+   if (!isElementNode(node)) {[m
+[36m@@ -406,7 +488,8 @@[m [mconst renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {[m
+     const rawLanguage = extractLanguageFromNode(codeElement) ?? extractLanguageFromNode(node);[m
+     const language = formatLanguageLabel(rawLanguage);[m
+     const props = convertProperties(node.properties);[m
+[31m-    const children = await renderChildren(node.children, key);[m
+[32m+[m[32m    const codeContext = context.insideCode ? context : { ...context, insideCode: true };[m
+[32m+[m[32m    const children = await renderChildren(node.children, key, codeContext);[m
+ [m
+     return createElement([m
+       "div",[m
+[36m@@ -421,7 +504,13 @@[m [mconst renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {[m
+   }[m
+ [m
+   const props = convertProperties(node.properties);[m
+[31m-  const children = await renderChildren(node.children, key);[m
+[32m+[m[32m  const childContext =[m
+[32m+[m[32m    node.tagName === "code" || node.tagName === "pre"[m
+[32m+[m[32m      ? context.insideCode[m
+[32m+[m[32m        ? context[m
+[32m+[m[32m        : { ...context, insideCode: true }[m
+[32m+[m[32m      : context;[m
+[32m+[m[32m  const children = await renderChildren(node.children, key, childContext);[m
+ [m
+   return createElement(node.tagName, { ...props, key }, ...children);[m
+ };[m
+[36m@@ -438,20 +527,8 @@[m [mexport async function PostContent({ html, className }: PostContentProps) {[m
+     return null;[m
+   }[m
+ [m
+[31m-  // 检查是否包含数学公式相关的标签或符号[m
+[31m-  const containsMath = normalized.includes("math") || [m
+[31m-                       normalized.includes("katex") || [m
+[31m-                       normalized.includes("$$") || [m
+[31m-                       normalized.includes("$");[m
+[31m-[m
+[31m-  // 如果包含数学公式，直接使用dangerouslySetInnerHTML以确保正确渲染[m
+[31m-  if (containsMath) {[m
+[31m-    return <div className={className} dangerouslySetInnerHTML={{ __html: normalized }} />;[m
+[31m-  }[m
+[31m-[m
+[31m-  // 对于不包含数学公式的内容，使用原有的解析方式[m
+   const root = processor.parse(normalized) as Root;[m
+[31m-  const children = await renderChildren(root.children, "node");[m
+[32m+[m[32m  const children = await renderChildren(root.children, "node", { insideCode: false });[m
+ [m
+   return <div className={className}>{children}</div>;[m
+ }[m

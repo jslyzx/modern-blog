@@ -1,8 +1,9 @@
 import Image, { type ImageProps } from "next/image";
-import { createElement, type CSSProperties, type ReactNode } from "react";
+import { createElement, Fragment, type CSSProperties, type ReactNode } from "react";
 import { unified } from "unified";
 import rehypeParse from "rehype-parse";
 import type { Element, Properties, Root, Text } from "hast";
+import { BlockMath, InlineMath } from "react-katex";
 
 import { loadImageMetadata } from "@/lib/image-metadata";
 
@@ -14,6 +15,13 @@ type HastNode = Root["children"][number];
 
 const DEFAULT_IMAGE_WIDTH = 1200;
 const DEFAULT_IMAGE_HEIGHT = 675;
+
+type RenderContext = {
+  insideCode: boolean;
+};
+
+const MATH_EXPRESSION_PATTERN =
+  /(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$|(?<!\\)\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)/g;
 
 const isElementNode = (node: HastNode): node is Element => node.type === "element";
 const isTextNode = (node: HastNode): node is Text => node.type === "text";
@@ -282,8 +290,78 @@ const formatLanguageLabel = (raw: string | null): string | null => {
     .join(" ");
 };
 
-const renderChildren = async (nodes: HastNode[] = [], keyPrefix: string): Promise<ReactNode[]> => {
-  const rendered = await Promise.all(nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`)));
+const renderTextWithMath = (value: string, key: string): ReactNode => {
+  if (!value) {
+    return value;
+  }
+
+  if (value.indexOf("$") === -1) {
+    return value.includes("\\$") ? value.replace(/\\\$/g, "$") : value;
+  }
+
+  MATH_EXPRESSION_PATTERN.lastIndex = 0;
+
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = MATH_EXPRESSION_PATTERN.exec(value)) !== null) {
+    if (match.index > lastIndex) {
+      const text = value.slice(lastIndex, match.index);
+      if (text) {
+        parts.push(text.includes("\\$") ? text.replace(/\\\$/g, "$") : text);
+      }
+    }
+
+    const [, blockExpression, inlineExpression] = match;
+    const expression = blockExpression ?? inlineExpression;
+
+    if (typeof expression === "string" && expression.trim().length > 0) {
+      const math = expression.trim();
+      const mathKey = `${key}-math-${parts.length}`;
+
+      if (blockExpression !== undefined) {
+        parts.push(createElement(BlockMath, { key: mathKey, math }));
+      } else {
+        parts.push(createElement(InlineMath, { key: mathKey, math }));
+      }
+    } else {
+      const raw = match[0];
+      if (raw) {
+        parts.push(raw.includes("\\$") ? raw.replace(/\\\$/g, "$") : raw);
+      }
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < value.length) {
+    const trailing = value.slice(lastIndex);
+    if (trailing) {
+      parts.push(trailing.includes("\\$") ? trailing.replace(/\\\$/g, "$") : trailing);
+    }
+  }
+
+  if (parts.length === 0) {
+    const fallback = value.includes("\\$") ? value.replace(/\\\$/g, "$") : value;
+    return fallback.length > 0 ? fallback : null;
+  }
+
+  if (parts.length === 1) {
+    return parts[0];
+  }
+
+  return createElement(Fragment, { key }, ...parts);
+};
+
+const renderChildren = async (
+  nodes: HastNode[] = [],
+  keyPrefix: string,
+  context: RenderContext,
+): Promise<ReactNode[]> => {
+  const rendered = await Promise.all(
+    nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`, context)),
+  );
 
   return rendered.filter((child): child is React.ReactElement | string | number => child !== null && child !== undefined);
 };
@@ -384,9 +462,13 @@ const renderImageElement = async (node: Element, key: string): Promise<ReactNode
   return <Image key={key} {...imageProps} />;
 };
 
-const renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {
+const renderNode = async (node: HastNode, key: string, context: RenderContext): Promise<ReactNode> => {
   if (isTextNode(node)) {
-    return node.value;
+    if (context.insideCode) {
+      return node.value;
+    }
+
+    return renderTextWithMath(node.value, key);
   }
 
   if (!isElementNode(node)) {
@@ -406,7 +488,8 @@ const renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {
     const rawLanguage = extractLanguageFromNode(codeElement) ?? extractLanguageFromNode(node);
     const language = formatLanguageLabel(rawLanguage);
     const props = convertProperties(node.properties);
-    const children = await renderChildren(node.children, key);
+    const codeContext = context.insideCode ? context : { ...context, insideCode: true };
+    const children = await renderChildren(node.children, key, codeContext);
 
     return createElement(
       "div",
@@ -421,7 +504,13 @@ const renderNode = async (node: HastNode, key: string): Promise<ReactNode> => {
   }
 
   const props = convertProperties(node.properties);
-  const children = await renderChildren(node.children, key);
+  const childContext =
+    node.tagName === "code" || node.tagName === "pre"
+      ? context.insideCode
+        ? context
+        : { ...context, insideCode: true }
+      : context;
+  const children = await renderChildren(node.children, key, childContext);
 
   return createElement(node.tagName, { ...props, key }, ...children);
 };
@@ -438,20 +527,8 @@ export async function PostContent({ html, className }: PostContentProps) {
     return null;
   }
 
-  // 检查是否包含数学公式相关的标签或符号
-  const containsMath = normalized.includes("math") || 
-                       normalized.includes("katex") || 
-                       normalized.includes("$$") || 
-                       normalized.includes("$");
-
-  // 如果包含数学公式，直接使用dangerouslySetInnerHTML以确保正确渲染
-  if (containsMath) {
-    return <div className={className} dangerouslySetInnerHTML={{ __html: normalized }} />;
-  }
-
-  // 对于不包含数学公式的内容，使用原有的解析方式
   const root = processor.parse(normalized) as Root;
-  const children = await renderChildren(root.children, "node");
+  const children = await renderChildren(root.children, "node", { insideCode: false });
 
   return <div className={className}>{children}</div>;
 }
