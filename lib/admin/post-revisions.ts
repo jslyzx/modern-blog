@@ -545,7 +545,7 @@ export const savePostRevisionSnapshot = async (
   if (capabilities.hasPublishedAt) {
     columns.push("published_at");
     placeholders.push("?");
-    values.push(snapshot.publishedAt ?? null);
+    values.push(snapshot.publishedAt instanceof Date ? snapshot.publishedAt.toISOString() : snapshot.publishedAt ?? null);
   }
 
   if (capabilities.hasEditorId) {

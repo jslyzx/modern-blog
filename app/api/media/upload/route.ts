@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import formidable, { errors as formidableErrors, type File as FormidableFile } from "formidable";
+import formidable, { type File as FormidableFile } from "formidable";
 import type { IncomingMessage } from "node:http";
-import { promises as fs } from "node:fs/promises";
+import * as fs from "node:fs/promises";
 import { Readable } from "node:stream";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
 
 import { apiErrors, createApiErrorResponse } from "@/lib/api/errors";
 import { auth } from "@/auth";
@@ -44,7 +45,7 @@ const toFormidableRequest = (request: NextRequest): FormidableCompatibleRequest 
   const stream = request.body;
   const nodeStream =
     stream != null
-      ? Readable.fromWeb(stream as unknown as ReadableStream<Uint8Array>)
+      ? Readable.fromWeb(stream as WebReadableStream)
       : Readable.from([]);
 
   const headers = Object.fromEntries(request.headers.entries()) as IncomingMessage["headers"];
@@ -86,8 +87,12 @@ const parseUpload = async (request: NextRequest): Promise<FormidableFile> => {
   });
 };
 
+interface FormidableError extends Error {
+  code?: string;
+}
+
 const isFileTooLargeError = (error: unknown) =>
-  error instanceof formidableErrors.FormidableError && error.code === formidableErrors.biggerThanMaxFileSize;
+  error instanceof Error && (error as FormidableError).code === 'biggerThanMaxFileSize';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

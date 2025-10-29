@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { AdminPost, BulkPostAction, PostStatus, PostStatusFilter } from "@/lib/admin/posts";
-import { DEFAULT_POST_STATUS_FILTER, isPostStatusFilter, POST_STATUS_FILTERS } from "@/lib/admin/posts";
+import type { AdminPost, BulkPostAction, PostStatus, PostStatusFilter } from "@/lib/admin/types/post";
+import { DEFAULT_POST_STATUS_FILTER, isPostStatusFilter, POST_STATUS_FILTERS } from "@/lib/admin/types/post";
 import { useToast } from "@/components/ui/use-toast";
 
 const STATUS_LABELS: Record<PostStatusFilter, string> = {

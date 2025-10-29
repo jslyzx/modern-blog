@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs/promises";
+import * as fs from "node:fs/promises";
 import path from "node:path";
 
 import { nanoid } from "nanoid";
@@ -77,7 +77,7 @@ export const URL_PREFIX = "/uploads";
 export const METADATA_FILE_EXTENSION = ".metadata.json";
 
 const WEBP_EXTENSION = ".webp";
-const MIME_EXTENSION_MAP = IMAGE_MIME_EXTENSION_MAP;
+
 const BLUR_PREVIEW_WIDTH = 24;
 const BLUR_PREVIEW_QUALITY = 32;
 
@@ -261,7 +261,7 @@ export class LocalMediaStorage implements MediaStorageProvider {
     const normalizedBase = extensionFromName ? sanitized.slice(0, -extensionFromName.length) : sanitized;
     const baseCandidate = normalizedBase || "file";
     const safeBase = baseCandidate.length > 64 ? baseCandidate.slice(0, 64) : baseCandidate;
-    const guessedExtension = file.mimetype ? MIME_EXTENSION_MAP[file.mimetype] : undefined;
+    const guessedExtension = file.mimetype ? (IMAGE_MIME_EXTENSION_MAP as Record<string, string>)[file.mimetype] : undefined;
     const extension = extensionFromName || guessedExtension || "";
 
     const { storagePath, url, filename } = await buildTargetPath(safeBase, extension);

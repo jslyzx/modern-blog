@@ -35,7 +35,7 @@ export function RestoreRevisionButton({ postId, revisionId, disabled }: RestoreR
         method: "POST",
       });
 
-      let payload: any = null;
+      let payload: { success?: boolean; error?: string } | null = null;
 
       try {
         payload = await response.json();

@@ -40,7 +40,7 @@ const handleWrite = async (request: Request) => {
     return unauthorized();
   }
 
-  let payload: any;
+  let payload: { key?: string; value?: unknown };
 
   try {
     payload = await request.json();

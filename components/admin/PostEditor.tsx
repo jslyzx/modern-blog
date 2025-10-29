@@ -170,11 +170,25 @@ export function PostEditor({ content, editorKey, onChange }: PostEditorProps) {
           return;
         }
 
-        const imageAttributes: Record<string, unknown> = {
+        const imageAttributes: {
+          src: string;
+          alt: string;
+          decoding: "async";
+          loading: "lazy";
+          "data-original-src": string;
+          width?: number;
+          height?: number;
+          "data-blur"?: string;
+          "data-webp"?: string;
+          "data-mime-type"?: string;
+          "data-webp-mime-type"?: string;
+          "data-size-bytes"?: number;
+          "data-webp-size-bytes"?: number;
+        } = {
           src: payload.url,
           alt: file.name,
-          decoding: "async",
-          loading: "lazy",
+          decoding: "async" as const,
+          loading: "lazy" as const,
           "data-original-src": payload.url,
         };
 

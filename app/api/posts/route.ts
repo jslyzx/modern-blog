@@ -57,7 +57,26 @@ export async function POST(request: Request) {
     return apiErrors.badRequest("请求载荷无效", "INVALID_PAYLOAD");
   }
 
-  const data = payload as any;
+  interface PostCreateData {
+    title: string;
+    slug?: string;
+    content?: string;
+    contentHtml?: string;
+    contentMd?: string;
+    contentMarkdown?: string;
+    excerpt?: string;
+    summary?: string;
+    status?: string;
+    tags?: number[];
+    tagIds?: number[];
+    featuredImageId?: number | null;
+    isFeatured?: boolean;
+    featured?: boolean | number | string;
+    allowComments?: boolean;
+    coverImageUrl?: string;
+  }
+
+  const data = payload as PostCreateData;
 
   if (!data.title || typeof data.title !== "string") {
     return apiErrors.badRequest("标题不能为空", "VALIDATION_ERROR");

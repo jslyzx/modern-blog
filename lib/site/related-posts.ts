@@ -198,7 +198,7 @@ const fetchTagIdsForPost = async (postId: number): Promise<number[]> => {
 
     const tagIds = rows
       .map((row) => (typeof row.tagId === "number" ? Math.max(0, Math.floor(row.tagId)) : null))
-      .filter((value): value is number => Boolean(value) && value > 0);
+      .filter((value): value is number => value !== null && value > 0);
 
     return Array.from(new Set(tagIds));
   } catch (error) {

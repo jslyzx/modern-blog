@@ -58,7 +58,7 @@ const getIdFromProperties = (properties: Element["properties"] | undefined): str
   }
 
   if (Array.isArray(id)) {
-    const first = id.find((value) => typeof value === "string" && value.trim());
+    const first = id.find((value): value is string => typeof value === "string" && value.trim() !== "");
     return first ?? null;
   }
 

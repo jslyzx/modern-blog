@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { EditorContent, useEditor } from "@tiptap/react";
 import Image from "@tiptap/extension-image";
 import StarterKit from "@tiptap/starter-kit";
+import History from "@tiptap/extension-history";
 import { Bold, Image as ImageIcon, Italic, List, ListOrdered, Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -39,12 +40,12 @@ export function RichTextEditor() {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        history: {
-          depth: 100,
-        },
         heading: {
           levels: [2, 3, 4],
         },
+      }),
+      History.configure({
+        depth: 100,
       }),
       Image.configure({
         HTMLAttributes: {
@@ -114,7 +115,7 @@ export function RichTextEditor() {
           return;
         }
 
-        const imageAttributes: Record<string, unknown> = {
+        const imageAttributes: { src: string; alt: string; width?: number; height?: number } = {
           src: payload.url,
           alt: file.name,
         };

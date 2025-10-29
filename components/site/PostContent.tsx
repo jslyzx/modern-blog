@@ -285,7 +285,7 @@ const formatLanguageLabel = (raw: string | null): string | null => {
 const renderChildren = async (nodes: HastNode[] = [], keyPrefix: string): Promise<ReactNode[]> => {
   const rendered = await Promise.all(nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`)));
 
-  return rendered.filter((child): child is ReactNode => child !== null && child !== undefined);
+  return rendered.filter((child): child is React.ReactElement | string | number => child !== null && child !== undefined);
 };
 
 const renderImageElement = async (node: Element, key: string): Promise<ReactNode> => {

@@ -129,7 +129,7 @@ const sanitizeStoredFormData = (value: unknown): PostFormData => {
     allowComments: typeof data.allowComments === "boolean" ? data.allowComments : fallback.allowComments,
     tagIds: Array.isArray(data.tagIds)
       ? data.tagIds
-          .map((id) => {
+          .map((id: string | number) => {
             if (typeof id === "number" && Number.isFinite(id)) {
               return Math.trunc(id);
             }
@@ -426,7 +426,7 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
           signal: controller.signal,
         });
 
-        let result: any = null;
+        let result: { success?: boolean; data?: { id: number; slug: string }; error?: string } | null = null;
 
         try {
           result = await response.json();
@@ -812,7 +812,7 @@ export function PostForm({ initialData, postId, initialTags }: PostFormProps) {
         method: "POST",
       });
 
-      let result: any = null;
+      let result: { success?: boolean; token?: string; previewUrl?: string; expiresAt?: string | number; expiresIn?: number; expiresInMs?: number; error?: string } | null = null;
 
       try {
         result = await response.json();

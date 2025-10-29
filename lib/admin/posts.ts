@@ -4,22 +4,34 @@ import { savePostRevisionSnapshot } from "@/lib/admin/post-revisions";
 import { getPool, query } from "@/lib/db";
 import { randomSlugId } from "@/lib/slug";
 import { getAllTagOptions, replacePostTags, type TagOption } from "@/lib/tags";
+import {
+  type AdminPost as AdminPostType,
+  type AdminPostsQuery as AdminPostsQueryType,
+  type BulkPostAction as BulkPostActionType,
+  type PostStatus as PostStatusType,
+  type PostStatusFilter as PostStatusFilterType,
+  DEFAULT_POST_STATUS_FILTER as DEFAULT_POST_STATUS_FILTER_IMPORT,
+  isBulkPostAction as isBulkPostActionImport,
+  isPostStatus as isPostStatusImport,
+  isPostStatusFilter as isPostStatusFilterImport,
+  POST_STATUS_VALUES as POST_STATUS_VALUES_IMPORT,
+  POST_STATUS_FILTERS as POST_STATUS_FILTERS_IMPORT,
+  BULK_POST_ACTIONS as BULK_POST_ACTIONS_IMPORT
+} from "@/lib/admin/types/post";
 
-export const POST_STATUS_VALUES = ["published", "draft", "archived"] as const;
-export type PostStatus = (typeof POST_STATUS_VALUES)[number];
-
-export const POST_STATUS_FILTERS = ["all", ...POST_STATUS_VALUES] as const;
-export type PostStatusFilter = (typeof POST_STATUS_FILTERS)[number];
-
-const POST_STATUS_VALUE_SET = new Set<string>(POST_STATUS_VALUES);
-const POST_STATUS_FILTER_SET = new Set<string>(POST_STATUS_FILTERS);
-
-export const BULK_POST_ACTIONS = ["delete", "publish", "draft", "archive"] as const;
-export type BulkPostAction = (typeof BULK_POST_ACTIONS)[number];
-
-const BULK_POST_ACTION_SET = new Set<string>(BULK_POST_ACTIONS);
-
-export const DEFAULT_POST_STATUS_FILTER: PostStatusFilter = "all";
+// Re-export for backward compatibility
+export type AdminPost = AdminPostType;
+export type AdminPostsQuery = AdminPostsQueryType;
+export type BulkPostAction = BulkPostActionType;
+export type PostStatus = PostStatusType;
+export type PostStatusFilter = PostStatusFilterType;
+export const DEFAULT_POST_STATUS_FILTER = DEFAULT_POST_STATUS_FILTER_IMPORT;
+export const isBulkPostAction = isBulkPostActionImport;
+export const isPostStatus = isPostStatusImport;
+export const isPostStatusFilter = isPostStatusFilterImport;
+export const POST_STATUS_VALUES = POST_STATUS_VALUES_IMPORT;
+export const POST_STATUS_FILTERS = POST_STATUS_FILTERS_IMPORT;
+export const BULK_POST_ACTIONS = BULK_POST_ACTIONS_IMPORT;
 
 type AdminPostRow = RowDataPacket & {
   id: number;
@@ -34,32 +46,7 @@ type AdminPostRow = RowDataPacket & {
   author_email: string | null;
 };
 
-export interface AdminPost {
-  id: number;
-  slug: string;
-  title: string;
-  status: PostStatus;
-  createdAt: string;
-  updatedAt: string | null;
-  publishedAt: string | null;
-  authorId: number | null;
-  authorName: string | null;
-  authorEmail: string | null;
-}
-
-export interface AdminPostsQuery {
-  status?: PostStatusFilter | null;
-  search?: string | null;
-}
-
-export const isPostStatus = (value: unknown): value is PostStatus =>
-  typeof value === "string" && POST_STATUS_VALUE_SET.has(value);
-
-export const isPostStatusFilter = (value: unknown): value is PostStatusFilter =>
-  typeof value === "string" && POST_STATUS_FILTER_SET.has(value);
-
-export const isBulkPostAction = (value: unknown): value is BulkPostAction =>
-  typeof value === "string" && BULK_POST_ACTION_SET.has(value);
+// Sets are no longer needed as type checking functions are now in types/post.ts
 
 const toIsoString = (value: Date | string | null): string | null => {
   if (!value) {
@@ -128,7 +115,7 @@ const INCREMENTAL_SUFFIX_LIMIT = 10;
 const RANDOM_SUFFIX_ATTEMPTS = 5;
 
 export async function ensureUniquePostSlug(baseSlug: string, options: UniqueSlugOptions = {}): Promise<string> {
-  let slug = baseSlug || `post-${randomSlugId()}`;
+  const slug = baseSlug || `${randomSlugId()}`;
   const { excludeId } = options;
 
   if (!(await isPostSlugTaken(slug, excludeId))) {

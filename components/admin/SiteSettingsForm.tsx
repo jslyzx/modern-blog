@@ -32,7 +32,7 @@ const updateSetting = async (key: string, value: string | null): Promise<void> =
     body: JSON.stringify({ key, value }),
   });
 
-  let payload: any = null;
+  let payload: { success?: boolean; error?: string } | null = null;
 
   try {
     payload = await response.json();
